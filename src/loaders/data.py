@@ -193,7 +193,12 @@ def load_dataset(args):
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
         split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)  
-        
+    
+    elif args.dataset == 'GLEAM':
+        _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
+        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
+        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
+
     else: # x) for a dataset with no support yet or incorrectly entered...
         err = f'[LOAD] Dataset `{args.dataset}` is not supported or seems incorrectly entered... please check!'
         logger.exception(err)

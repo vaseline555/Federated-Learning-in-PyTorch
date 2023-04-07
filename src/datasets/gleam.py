@@ -43,8 +43,9 @@ def fetch_gleam(args, root, seed, test_fraction):
             URL, root, filename= URL.split('/')[-1],
             remove_finished=True, md5=MD5
         )
-        os.rename(os.path.join(root, 'covtype.data'), os.path.join(root, 'covtype.csv'))
-    
+        os.remove(os.path.join(root, 'README_GLEAM.pdf'))
+        import pdb;pdb.set_trace()
+        
     def _munge_and_split(root, seed, test_fraction):
         # load data
         df = pd.read_csv(os.path.join(root, 'covtype.csv'), header=None)
