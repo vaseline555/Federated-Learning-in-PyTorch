@@ -27,7 +27,7 @@ def main(args, writer):
 
     # get dataset
     server_dataset, client_datasets = load_dataset(args)
-
+    
     # adjust device
     if torch.cuda.is_available(): 
         args.device = 'cuda' if args.device_ids == [] else f'cuda:{args.device_ids[0]}'
@@ -38,13 +38,14 @@ def main(args, writer):
     model, args = load_model(args)
 
     # create central server
-    server = Server(args=args, writer=writer, model=model, server_testset=server_dataset, client_datasets=client_datasets)
-    
-    # initialize central server
-    server.setup()
+    server = Server(args, writer, server_dataset, client_datasets, model)
 
-    # do federated learning
-    server.fit()
+    # federated learning
+    for curr_round in args.R:
+        server.fit(curr_round)
+        if curr_round % args.eval_every == 1:
+            server.evaluate(curr_round)
+    server.wrap_up()
 
     # save results (losses and metrics)
     """ 아래 내용 전부 server 내부 기능으로 삽입
@@ -67,7 +68,7 @@ def main(args, writer):
     
 if __name__ == "__main__":
     # parse user inputs as arguments
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
     
     #####################
     # Default arguments #
@@ -76,8 +77,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', help='global random seed', type=int, default=5959)
     parser.add_argument('--device', help='device to use; `cpu`, `cuda`', type=str, default='cpu')
     parser.add_argument('--device_ids',  nargs='+', type=int, help='GPU device ids for multi-GPU training (use all available GPUs if no number is passed)', default=[])
-    parser.add_argument('--data_path', help='path to read data', type=str, default='./data')
-    parser.add_argument('--log_path', help='path to write logs', type=str, default='./log')
+    parser.add_argument('--data_path', help='path to read data from', type=str, default='./data')
+    parser.add_argument('--log_path', help='path to store logs', type=str, default='./log')
     parser.add_argument('--result_path', help='path to save results', type=str, default='./result')
     parser.add_argument('--use_tb', help='use TensorBoard to track logs (if passed)', action='store_true')
     parser.add_argument('--tb_port', help='TensorBoard port number (valid only if `use_tb`)', type=int, default=6006)
@@ -87,11 +88,13 @@ if __name__ == "__main__":
     # Dataset arguments #
     #####################
     ## dataset
-    parser.add_argument('--dataset', help='name of dataset to use for an experiment\
-        - image classification datasets in `torchvision.datasets`,\
-        or text classification datasets in `torchtext.datasets`,\
-        or LEAF benchmarks [FEMNIST|Sent140|Shakespeare|CelebA|Reddit],\
-        or among [TinyImageNet|CINIC10|BeerReviewsA|BeerReviewsL|Heart|Adult|Cover|GLEAM]', type=str, required=True)
+    parser.add_argument('--dataset', help='''name of dataset to use for an experiment 
+    * NOTE: case sensitive*
+    - image classification datasets in `torchvision.datasets`,
+    - text classification datasets in `torchtext.datasets`,
+    - LEAF benchmarks [ FEMNIST | Sent140 | Shakespeare | CelebA | Reddit ],
+    - among [ TinyImageNet | CINIC10 | BeerReviewsA | BeerReviewsL | Heart | Adult | Cover | GLEAM ]
+    ''', type=str, required=True)
     
     ## data augmentation arguments
     parser.add_argument('--resize', help='resize input images (using `torchvision.transforms.Resize`)', type=int, default=28)
@@ -101,7 +104,13 @@ if __name__ == "__main__":
     parser.add_argument('--randvf', help='randomly flip input vertically (using `torchvision.transforms.RandomVerticalFlip`)', type=float, choices=[Range(0., 1.)], default=None)
     
     ## statistical heterogeneity simulation arguments
-    parser.add_argument('--split_type', help='type of an expriment to conduct', type=str, choices=['iid', 'unbalanced', 'patho', 'diri', 'pre'], required=True)
+    parser.add_argument('--split_type', help='''type of data split scenario
+    - `iid`: statistically homogeneous setting,
+    - `unbalanced`: unbalance in sample counts across clients,
+    - `patho`: pathological non-IID split scenario proposed in (McMahan et al., 2016),
+    - `diri`: Dirichlet distribution-based split scenario proposed in (Hsu et al., 2019),
+    - `pre`: pre-defined data split scenario
+    ''', type=str, choices=['iid', 'unbalanced', 'patho', 'diri', 'pre'], required=True)
     parser.add_argument('--mincls', help='the minimum number of distinct classes per client (only used when `split_type` is `patho`)', type=int, default=2)
     parser.add_argument('--cncntrtn', help='a concentration parameter for Dirichlet distribution (only used when `split_type` is `diri`)', type=float, default=0.1)
     parser.add_argument('--rawsmpl', help='fraction of raw data to be used (only used when one of `LEAF` datasets is used)', type=float, choices=[Range(0., 1.)], default=1.0)
@@ -110,7 +119,7 @@ if __name__ == "__main__":
     # Model arguments #
     ###################
     ## model
-    parser.add_argument('--model_name', help='a model to be used', type=str,
+    parser.add_argument('--model_name', help='a model to be used (note that it is case sensitive)', type=str,
         choices=[
             'TwoNN', 'TwoCNN',
             'LeNet', 'MobileNet', 'SqueezeNet',
@@ -119,7 +128,7 @@ if __name__ == "__main__":
             'MobileNeXt', 'SqueezeNeXt', 'MobileViT', 
             'NextCharLSTM', 'NextWordLSTM',
             'DistilBert', 'SqueezeBert', 'MobileBert',
-            'LogReg'
+            'LogReg', 'GRUClassifier'
         ],
         required=True
     )
@@ -128,6 +137,7 @@ if __name__ == "__main__":
     parser.add_argument('--use_model_tokenizer', help='use a model-specific tokenizer (if passed)', action='store_true')
     parser.add_argument('--use_pt_model', help='use a pre-trained model weights for fine-tuning (if passed)', action='store_true')
     parser.add_argument('--seq_len', help='maximum sequence length used for `torchtext.datasets`)', type=int, default=512)
+    parser.add_argument('--num_layers', help='number of layers in recurrent cells', type=int, default=2)
     parser.add_argument('--num_embeddings', help='size of embedding dictionary', type=int)
     parser.add_argument('--embedding_size', help='embedding dimension of language models', type=int)
     
@@ -140,15 +150,16 @@ if __name__ == "__main__":
         choices=['fedavg', 'fedsgd', 'fedprox'], 
         required=True
     )
-    parser.add_argument('--eval_type', help='evaluation type of the global model:\
-        `pfl` for evaluation of personalization performance (i.e., evaluate using each client\'s local evaluation set),\
-        `ho` for evaluation on global hold-out dataset (i.e., evaluate using separate holdout dataset located at the server)', type=str,
-        choices=['pfl', 'ho'],
+    parser.add_argument('--eval_type', help='''the evaluation type of a model trained from FL algorithm
+    - `local`: evaluation of personalization model on local hold-out dataset  (i.e., evaluate personalized models using each client\'s local evaluation set)
+    - `global`: evaluation of a global model on global hold-out dataset (i.e., evaluate the global model using separate holdout dataset located at the server)
+    - 'both': combination of `local` and `global` setting
+    ''', type=str,
+        choices=['local', 'global', 'both'],
         required=True
     )
-    parser.add_argument('--eval_fraction', help='fraction of hold-out dataset for evaluation of personalization (when `eval_type` is `pfl`),\
-        ignored when `eval_type` is `ho`', type=float, default=0.2)
-    parser.add_argument('--eval_every', help='frequency of the evaluation (i.e., evaluate every `eval_every` round)', type=int, default=100)
+    parser.add_argument('--eval_fraction', help='fraction of hold-out dataset for evaluation', type=float, default=0.2)
+    parser.add_argument('--eval_every', help='frequency of the evaluation (i.e., evaluate peformance of a model every `eval_every` round)', type=int, default=100)
     parser.add_argument('--C', help='sampling fraction of clietns per round', type=float, default=0.1)
     parser.add_argument('--K', help='number of total cilents participating in federated training', type=int, default=100)
     parser.add_argument('--R', help='number of total rounds', type=int, default=500)

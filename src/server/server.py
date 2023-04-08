@@ -11,70 +11,49 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from collections import OrderedDict
 
-from ..models import *
-from ..utils import *
 from ..client import Client
 
 logger = logging.getLogger(__name__)
 
 
+
 class Server:
-    """Class for implementing center server orchestrating the whole process of federated learning
-    
-    At first, center server distribute model skeleton to all participating clients with configurations.
-    While proceeding federated learning rounds, the center server samples some fraction of clients,
-    receives locally updated parameters, averages them as a global parameter (model), and apply them to global model.
-    In the next round, newly selected clients will recevie the updated global model as its local model.  
-    
-    Attributes:
-        clients: List containing Client instances participating a federated learning.
-        __round: Int for indcating the current federated round.
-        writer: SummaryWriter instance to track a metric and a loss of the global model.
-        model: torch.nn instance for a global model.
-        seed: Int for random seed.
-        device: Training machine indicator (e.g. "cpu", "cuda").
-        mp_flag: Boolean indicator of the usage of multiprocessing for "client_update" and "client_evaluate" methods.
-        data_path: Path to read data.
-        dataset_name: Name of the dataset.
-        num_shards: Number of shards for simulating non-IID data split (valid only when 'iid = False").
-        iid: Boolean Indicator of how to split dataset (IID or non-IID).
-        init_config: kwargs for the initialization of the model.
-        fraction: Ratio for the number of clients selected in each federated round.
-        num_clients: Total number of participating clients.
-        local_epochs: Epochs required for client model update.
-        batch_size: Batch size for updating/evaluating a client/global model.
-        criterion: torch.nn instance for calculating loss.
-        optimizer: torch.optim instance for updating parameters.
-        optim_config: Kwargs provided for optimizer.
+    """Centeral server orchestrating the whole process of federated learning.
     """
-    def __init__(self, writer, model_config={}, global_config={}, data_config={}, init_config={}, fed_config={}, optim_config={}):
-        self.clients = None
-        self._round = 0
+    def __init__(self, args, writer, server_dataset, client_datasets, model):
+        self.args = args
         self.writer = writer
 
-        self.model = eval(model_config["name"])(**model_config)
+
+        self.global_model = model
+        self.global_dataset = server_dataset
         
-        self.seed = global_config["seed"]
-        self.device = global_config["device"]
-        self.mp_flag = global_config["is_mp"]
-
-        self.data_path = data_config["data_path"]
-        self.dataset_name = data_config["dataset_name"]
-        self.num_shards = data_config["num_shards"]
-        self.iid = data_config["iid"]
-
-        self.init_config = init_config
-
-        self.fraction = fed_config["C"]
-        self.num_clients = fed_config["K"]
-        self.num_rounds = fed_config["R"]
-        self.local_epochs = fed_config["E"]
-        self.batch_size = fed_config["B"]
-
-        self.criterion = fed_config["criterion"]
-        self.optimizer = fed_config["optimizer"]
-        self.optim_config = optim_config
+        self.clients = self._create_clients(client_datasets)
         
+    def _create_clients(self, client_datasets):
+        """Initialize `Client` instance."""
+        return 
+
+         
+        clients = []
+        for k, dataset in tqdm(enumerate(local_datasets), leave=False):
+            client = Client(client_id=k, local_data=dataset, device=self.device)
+            clients.append(client)
+
+        message = f"[Round: {str(self._round).zfill(4)}] ...successfully created all {str(self.num_clients)} clients!"
+        print(message); logging.info(message)
+        del message; gc.collect()
+        return clients
+
+    def setup_clients(self, **client_config):
+        """Set up each client."""
+        for k, client in tqdm(enumerate(self.clients), leave=False):
+            client.setup(**client_config)
+        
+        message = f"[Round: {str(self._round).zfill(4)}] ...successfully finished setup of all {str(self.num_clients)} clients!"
+        print(message); logging.info(message)
+        del message; gc.collect()
+
     def setup(self, **init_kwargs):
         """Set up all configuration for federated learning."""
         # valid only before the very first round
@@ -108,26 +87,7 @@ class Server:
         # send the model skeleton to all clients
         self.transmit_model()
         
-    def create_clients(self, local_datasets):
-        """Initialize each Client instance."""
-        clients = []
-        for k, dataset in tqdm(enumerate(local_datasets), leave=False):
-            client = Client(client_id=k, local_data=dataset, device=self.device)
-            clients.append(client)
-
-        message = f"[Round: {str(self._round).zfill(4)}] ...successfully created all {str(self.num_clients)} clients!"
-        print(message); logging.info(message)
-        del message; gc.collect()
-        return clients
-
-    def setup_clients(self, **client_config):
-        """Set up each client."""
-        for k, client in tqdm(enumerate(self.clients), leave=False):
-            client.setup(**client_config)
-        
-        message = f"[Round: {str(self._round).zfill(4)}] ...successfully finished setup of all {str(self.num_clients)} clients!"
-        print(message); logging.info(message)
-        del message; gc.collect()
+    
 
     def transmit_model(self, sampled_client_indices=None):
         """Send the updated global model to selected/all clients."""

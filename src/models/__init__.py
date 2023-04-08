@@ -14,3 +14,4 @@ from .distilbert import DistilBert
 from .mobilebert import MobileBert
 from .squeezebert import SqueezeBert
 from .logreg import LogReg
+from .gruclassifier import GRUClassifier

@@ -121,7 +121,7 @@ def load_dataset(args):
     
     if args.dataset in ['FEMNIST', 'Shakespeare', 'Sent140', 'CelebA', 'Reddit']: # 1) for a special dataset - LEAF benchmark...
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
          
         # define transform
         if args.dataset in ['FEMNIST', 'CelebA']:
@@ -181,23 +181,23 @@ def load_dataset(args):
         
     elif args.dataset == 'Heart':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
         split_map, client_datasets, args = fetch_heart(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
     
     elif args.dataset == 'Adult':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
         split_map, client_datasets, args = fetch_adult(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
     
     elif args.dataset == 'Cover':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
         split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)  
     
     elif args.dataset == 'GLEAM':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
+        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction, seq_len=args.seq_len)
 
     else: # x) for a dataset with no support yet or incorrectly entered...
         err = f'[LOAD] Dataset `{args.dataset}` is not supported or seems incorrectly entered... please check!'
@@ -214,7 +214,7 @@ def load_dataset(args):
         args.criterion = torch.nn.BCEWithLogitsLoss
         
     # check if global holdout set is required or not
-    if args.eval_type == 'pfl':
+    if args.eval_type == 'local':
         raw_test = None
     else:
         if raw_test is None:
