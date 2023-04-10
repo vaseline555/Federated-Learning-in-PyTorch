@@ -7,8 +7,7 @@ import logging
 import torchtext
 
 from tqdm import tqdm
-
-from src.utils import TqdmToLogger
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -97,35 +96,38 @@ def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
 
     def _create_data_from_iterator(vocab, iterator, max_len):
         inputs, targets = [], []
-        for label, tokens in tqdm(iterator, desc=f'[LOAD] [{dataset_name}] ......parse and tokenize!', file=TqdmToLogger(logger), mininterval=10):
-            tokens = torch.tensor([vocab[token] for token in tokens])
-            
-            # pad tokens into max length
-            pad_len = max_len - len(tokens) % max_len
-            if pad_len > 0:
-                tokens = torch.cat((tokens, torch.empty(pad_len).fill_(vocab['<pad>']).long()))
-            else:
-                tokens = tokens[:max_len]
+        
+        with logging_redirect_tqdm():
+            for label, tokens in tqdm(iterator, desc=f'[LOAD] [{dataset_name}] ......parse and tokenize!'):
+                tokens = torch.tensor([vocab[token] for token in tokens])
+                
+                # pad tokens into max length
+                pad_len = max_len - len(tokens) % max_len
+                if pad_len > 0:
+                    tokens = torch.cat((tokens, torch.empty(pad_len).fill_(vocab['<pad>']).long()))
+                else:
+                    tokens = tokens[:max_len]
 
-            inputs.append(tokens)
-            targets.append(label)
+                inputs.append(tokens)
+                targets.append(label)
         return inputs, targets
     
     def _create_data_from_tokenizer(tokenizer, iterator, max_len):
         inputs, targets = [], []
-        for label, tokens in tqdm(iterator, desc=f'[LOAD] [{dataset_name}] ......parse and tokenize!', file=TqdmToLogger(logger), mininterval=10):
-            tokens = tokenizer(
-                list(tokens),
-                return_tensors='pt', 
-                is_split_into_words=True,
-                max_length=max_len,
-                return_attention_mask=False,
-                truncation=True,
-                padding='max_length'
-            )['input_ids']
+        with logging_redirect_tqdm():
+            for label, tokens in tqdm(iterator, desc=f'[LOAD] [{dataset_name}] ......parse and tokenize!'):
+                tokens = tokenizer(
+                    list(tokens),
+                    return_tensors='pt', 
+                    is_split_into_words=True,
+                    max_length=max_len,
+                    return_attention_mask=False,
+                    truncation=True,
+                    padding='max_length'
+                )['input_ids']
 
-            inputs.append(*tokens)
-            targets.append(label)
+                inputs.append(*tokens)
+                targets.append(label)
         return inputs, targets
 
     # download files

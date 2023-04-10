@@ -9,11 +9,11 @@ import importlib
 import numpy as np
 
 from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 from abc import abstractmethod
 from multiprocessing import pool
 
 from src.datasets.leaf import *
-from src.utils import TqdmToLogger
 
 logger = logging.getLogger(__name__)
 
@@ -174,12 +174,12 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
             return (tr_dset, te_dset)
         
         with pool.ThreadPool(processes=n_jobs) as workhorse:
-            datasets = workhorse.starmap(_construct_dataset, [(idx, user) for idx, user in tqdm(enumerate(raw_train['users']), desc=f'[LOAD] [LEAF - {dataset_name.upper()}] ......create datasets!', file=TqdmToLogger(logger))])
+            with logging_redirect_tqdm():
+                datasets = workhorse.starmap(_construct_dataset, [(idx, user) for idx, user in tqdm(enumerate(raw_train['users']), leave=False)])
         return datasets
     
     # retrieve appropriate dataset module
     dataset_class = getattr(sys.modules[__name__], dataset_name)
-    args.num_classes = NUM_CLASSES[dataset_name.lower()]
     
     # download data
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] Check if raw data exists; if not, start downloading!')
@@ -211,7 +211,9 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
     client_datasets = _assign_to_clients(dataset_name.lower(), dataset_class, raw_train, raw_test, transforms)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] ...instantiated client datasets and created split hashmap!')
     
-    # input channels or number of embeddings
+    # adjust arguments
+    args.num_classes = NUM_CLASSES[dataset_name.lower()]
+    args.K = len(client_datasets)
     if 'in_channels' in CONFIG[dataset_name.lower()].keys():
         args.in_channels = CONFIG[dataset_name.lower()]['in_channels']
     if 'seq_len' in CONFIG[dataset_name.lower()].keys():

@@ -1,17 +1,16 @@
+import ray
 import copy
-import gc
+import torch
 import logging
 
 import numpy as np
-import torch
-import torch.nn as nn
 
-from multiprocessing import pool, cpu_count
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
-from collections import OrderedDict
+from tqdm import tqdm, trange
+from tqdm.contrib.logging import logging_redirect_tqdm
+from collections import ChainMap, defaultdict
 
-from ..client import Client
+from src import init_weights, to_iterator
+from src.client import Client
 
 logger = logging.getLogger(__name__)
 
@@ -24,135 +23,129 @@ class Server:
         self.args = args
         self.writer = writer
 
+        # current round indicator
+        self._round = 0
 
-        self.global_model = model
-        self.global_dataset = server_dataset
-        
+        # global holdout set
+        if self.args.eval_type != 'local':
+            self.server_dataset = server_dataset
+
+        # model
+        self.model = self._init_model(model)
+
+        # clients
         self.clients = self._create_clients(client_datasets)
-        
+        self._broadcast([i for i in range(self.args.K)])
+        self._round += 1
+
+        # result container
+        self.results = defaultdict(dict)
+
+    def _init_model(self, model):
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Initialize a model!')
+        model = init_weights(model, self.args.init_type, self.args.init_gain)
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...sucessfully initialized the model ({self.args.model_name}; init type: {self.args.init_type.upper()})!')
+        return model
+
     def _create_clients(self, client_datasets):
-        """Initialize `Client` instance."""
-        return 
-
-         
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Create clients!')
         clients = []
-        for k, dataset in tqdm(enumerate(local_datasets), leave=False):
-            client = Client(client_id=k, local_data=dataset, device=self.device)
-            clients.append(client)
+        for k in trange(self.args.K, leave=False):
+            clients.append(Client(self.args, k, *client_datasets[k]))
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...sucessfully created {self.args.K} clients!')
+        return clients 
 
-        message = f"[Round: {str(self._round).zfill(4)}] ...successfully created all {str(self.num_clients)} clients!"
-        print(message); logging.info(message)
-        del message; gc.collect()
-        return clients
+    def _broadcast(self, indices):
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Broadcast the server model!')
+        for idx in tqdm(indices, leave=False):
+            self.clients[idx].model = copy.deepcopy(self.model)
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...sucessfully broadcasted to selected {len(indices)} clients!')
 
-    def setup_clients(self, **client_config):
-        """Set up each client."""
-        for k, client in tqdm(enumerate(self.clients), leave=False):
-            client.setup(**client_config)
-        
-        message = f"[Round: {str(self._round).zfill(4)}] ...successfully finished setup of all {str(self.num_clients)} clients!"
-        print(message); logging.info(message)
-        del message; gc.collect()
-
-    def setup(self, **init_kwargs):
-        """Set up all configuration for federated learning."""
-        # valid only before the very first round
-        assert self._round == 0
-
-        # initialize weights of the model
-        torch.manual_seed(self.seed)
-        init_net(self.model, **self.init_config)
-
-        message = f"[Round: {str(self._round).zfill(4)}] ...successfully initialized model (# parameters: {str(sum(p.numel() for p in self.model.parameters()))})!"
-        print(message); logging.info(message)
-        del message; gc.collect()
-
-        # split local dataset for each client
-        local_datasets, test_dataset = create_datasets(self.data_path, self.dataset_name, self.num_clients, self.num_shards, self.iid)
-        
-        # assign dataset to each client
-        self.clients = self.create_clients(local_datasets)
-
-        # prepare hold-out dataset for evaluation
-        self.data = test_dataset
-        self.dataloader = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False)
-        
-        # configure detailed settings for client upate and 
-        self.setup_clients(
-            batch_size=self.batch_size,
-            criterion=self.criterion, num_local_epochs=self.local_epochs,
-            optimizer=self.optimizer, optim_config=self.optim_config
-            )
-        
-        # send the model skeleton to all clients
-        self.transmit_model()
-        
-    
-
-    def transmit_model(self, sampled_client_indices=None):
-        """Send the updated global model to selected/all clients."""
-        if sampled_client_indices is None:
-            # send the global model to all clients before the very first and after the last federated round
-            assert (self._round == 0) or (self._round == self.num_rounds)
-
-            for client in tqdm(self.clients, leave=False):
-                client.model = copy.deepcopy(self.model)
-
-            message = f"[Round: {str(self._round).zfill(4)}] ...successfully transmitted models to all {str(self.num_clients)} clients!"
-            print(message); logging.info(message)
-            del message; gc.collect()
-        else:
-            # send the global model to selected clients
-            assert self._round != 0
-
-            for idx in tqdm(sampled_client_indices, leave=False):
-                self.clients[idx].model = copy.deepcopy(self.model)
-            
-            message = f"[Round: {str(self._round).zfill(4)}] ...successfully transmitted models to {str(len(sampled_client_indices))} selected clients!"
-            print(message); logging.info(message)
-            del message; gc.collect()
-
-    def sample_clients(self):
-        """Select some fraction of all clients."""
-        # sample clients randommly
-        message = f"[Round: {str(self._round).zfill(4)}] Select clients...!"
-        print(message); logging.info(message)
-        del message; gc.collect()
-
-        num_sampled_clients = max(int(self.fraction * self.num_clients), 1)
-        sampled_client_indices = sorted(np.random.choice(a=[i for i in range(self.num_clients)], size=num_sampled_clients, replace=False).tolist())
-
+    def _sample(self):
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Sample clients!')
+        num_sampled_clients = max(int(self.args.C * self.args.K), 1)
+        sampled_client_indices = sorted(np.random.choice(a=[i for i in range(self.args.K)], size=num_sampled_clients, replace=False).tolist())
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...{num_sampled_clients} clients are selected!')
         return sampled_client_indices
+
+    def _request(self, indices, eval=False):
+        @ray.remote
+        def update_clients(client):
+            update_result = client.update()
+            return {client.identifier: len(client)}, {client.identifier: update_result}
+
+        @ray.remote
+        def evaluate_clients(client):
+            eval_result = client.evaluate() 
+            return {client.identifier: eval_result}
+
+        def log_results(results, eval=False):
+            for identifier, result in results.items():
+                if eval:
+                    logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] [EVALUATE] [CLIENT] < {str(identifier).zfill(8)} > | Loss: {result["loss"]:.4f} | Acc.: {result["acc"]:.4f}')
+                else:
+                    logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] [UPDATE] [CLIENT] < {str(identifier).zfill(8)} > | Loss: {result[self.args.E]["loss"]:.4f} | Acc.: {result[self.args.E]["acc"]:.4f}') 
+
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Request {"updates" if not eval else "evaluation"} to {"all" if indices is None else len(indices)} clients!')
+        if eval:
+            work_ids = [evaluate_clients.remote(self.clients[idx]) for idx in indices]
+            with logging_redirect_tqdm():
+                eval_results = dict(ChainMap(*[eval_result for eval_result in tqdm(to_iterator(work_ids), total=len(indices), leave=False)]))
+            log_results(eval_results, eval=True)
+            logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...completed evaluation of {"all" if indices is None else len(indices)} clients!')
+            return eval_results
+        else:
+            work_ids = [update_clients.remote(self.clients[idx]) for idx in indices]
+            with logging_redirect_tqdm():
+                results = [(length, update_result) for length, update_result in tqdm(to_iterator(work_ids), total=len(indices), leave=False)]
+            update_sizes, update_results = list(map(list, zip(*results)))
+            update_sizes, update_results = dict(ChainMap(*update_sizes)), dict(ChainMap(*update_results))
+            log_results(update_results, eval=False)
+            logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...completed updates of {"all" if indices is None else len(indices)} clients!')
+            return update_sizes, update_results
     
-    def update_selected_clients(self, sampled_client_indices):
-        """Call "client_update" function of each selected client."""
-        # update selected clients
-        message = f"[Round: {str(self._round).zfill(4)}] Start updating selected {len(sampled_client_indices)} clients...!"
-        print(message); logging.info(message)
-        del message; gc.collect()
+    def _aggregate(self, indices, update_sizes):
+        pass
 
-        selected_total_size = 0
-        for idx in tqdm(sampled_client_indices, leave=False):
-            self.clients[idx].client_update()
-            selected_total_size += len(self.clients[idx])
+    def _evaluate(self):
+        pass
 
-        message = f"[Round: {str(self._round).zfill(4)}] ...{len(sampled_client_indices)} clients are selected and updated (with total sample size: {str(selected_total_size)})!"
-        print(message); logging.info(message)
-        del message; gc.collect()
+    def update(self):
+        indices = self._sample()
+        self._broadcast(indices)
+        update_sizes, update_results = self._request(indices, eval=False)
+        self.results[self._round]['clients_updated'] = update_results
+        self._aggregate(indices, update_sizes)
+        return indices
 
-        return selected_total_size
-    
+    def evaluate(self, indices):
+        if self.args.eval_type == 'local':
+            clients_eval_results = self._request(indices, eval=True)
+
+            self.results[self._round]['clients_evaluated'] = clients_eval_results
+        elif self.args.eval_type == 'global':
+            server_eval_result = self._evaluate()
+
+            self.results[self._round]['server_evaluated'] = server_eval_result
+        elif self.args.eval_type == 'both':
+            clients_eval_results = self._request(indices, eval=True)
+            server_eval_result = self._evaluate()
+
+            self.results[self._round]['clients_evaluated'] = clients_eval_results
+            self.results[self._round]['server_evaluated'] = server_eval_result
+
+    '''
     def mp_update_selected_clients(self, selected_index):
         """Multiprocessing-applied version of "update_selected_clients" method."""
         # update selected clients
-        message = f"[Round: {str(self._round).zfill(4)}] Start updating selected client {str(self.clients[selected_index].id).zfill(4)}...!"
+        message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Start updating selected client {st[{self.args.algorithm.upper()}] r(self.clients[selected_index].id).zfill(4)}...!"
         print(message, flush=True); logging.info(message)
         del message; gc.collect()
 
         self.clients[selected_index].client_update()
         client_size = len(self.clients[selected_index])
 
-        message = f"[Round: {str(self._round).zfill(4)}] ...client {str(self.clients[selected_index].id).zfill(4)} is selected and updated (with total sample size: {str(client_size)})!"
+        message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...client {st[{self.args.algorithm.upper()}] r(self.clients[selected_index].id).zfill(4)} is selected and updated (with total sample size: {str(client_size)})!"
         print(message, flush=True); logging.info(message)
         del message; gc.collect()
 
@@ -160,7 +153,7 @@ class Server:
 
     def average_model(self, sampled_client_indices, coefficients):
         """Average the updated and transmitted parameters from each selected client."""
-        message = f"[Round: {str(self._round).zfill(4)}] Aggregate updated weights of {len(sampled_client_indices)} clients...!"
+        message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Aggregate updated weights of {len(sampled_client_indices)} clients...!"
         print(message); logging.info(message)
         del message; gc.collect()
 
@@ -174,20 +167,20 @@ class Server:
                     averaged_weights[key] += coefficients[it] * local_weights[key]
         self.model.load_state_dict(averaged_weights)
 
-        message = f"[Round: {str(self._round).zfill(4)}] ...updated weights of {len(sampled_client_indices)} clients are successfully averaged!"
+        message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...updated weights of {len(sampled_client_indices)} clients are successfully averaged!"
         print(message); logging.info(message)
         del message; gc.collect()
     
     def evaluate_selected_models(self, sampled_client_indices):
         """Call "client_evaluate" function of each selected client."""
-        message = f"[Round: {str(self._round).zfill(4)}] Evaluate selected {str(len(sampled_client_indices))} clients' models...!"
+        message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Evaluate selected {str(len(sampled_client_indices))} clients' models...!"
         print(message); logging.info(message)
         del message; gc.collect()
 
         for idx in sampled_client_indices:
             self.clients[idx].client_evaluate()
 
-        message = f"[Round: {str(self._round).zfill(4)}] ...finished evaluation of {str(len(sampled_client_indices))} selected clients!"
+        message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] ...finished evaluation of {str(len(sampled_client_indices))} selected clients!"
         print(message); logging.info(message)
         del message; gc.collect()
 
@@ -214,7 +207,7 @@ class Server:
 
         # evaluate selected clients with local dataset (same as the one used for local update)
         if self.mp_flag:
-            message = f"[Round: {str(self._round).zfill(4)}] Evaluate selected {str(len(sampled_client_indices))} clients' models...!"
+            message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Evaluate selected {str(len(sampled_client_indices))} clients' models...!"
             print(message); logging.info(message)
             del message; gc.collect()
 
@@ -274,10 +267,10 @@ class Server:
                 self._round
                 )
 
-            message = f"[Round: {str(self._round).zfill(4)}] Evaluate global model's performance...!\
+            message = f"[{self.args.algorithm.upper()}] [Round: {str(self._round).zfill(4)}] Evaluate global model's performance...!\
                 \n\t[Server] ...finished evaluation!\
                 \n\t=> Loss: {test_loss:.4f}\
                 \n\t=> Accuracy: {100. * test_accuracy:.2f}%\n"            
             print(message); logging.info(message)
             del message; gc.collect()
-        self.transmit_model()
+        self.transmit_model()'''

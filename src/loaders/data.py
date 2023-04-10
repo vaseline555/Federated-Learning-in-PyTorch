@@ -6,10 +6,10 @@ import torchvision
 import transformers
 
 from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 from collections import ChainMap
 from multiprocessing import pool
 
-from src.utils import TqdmToLogger
 from src.datasets import *
 from src.loaders.split import simulate_split
 
@@ -84,7 +84,7 @@ def load_dataset(args):
     # method to construct per-client dataset
     def _construct_dataset(raw_train, idx, sample_indices):
         subset = torch.utils.data.Subset(raw_train, sample_indices)
-        test_size = int(len(subset) * args.eval_fraction)
+        test_size = int(len(subset) * args.test_fraction)
         training_set, test_set = torch.utils.data.random_split(subset, [len(subset) - test_size, test_size])
         traininig_set = SubsetWrapper(training_set, f'< {str(idx).zfill(8)} > (train)')
         test_set = SubsetWrapper(test_set, f'< {str(idx).zfill(8)} > (test)')
@@ -140,7 +140,7 @@ def load_dataset(args):
             root=args.data_path, 
             seed=args.seed, 
             raw_data_fraction=args.rawsmpl, 
-            test_fraction=args.eval_fraction, 
+            test_fraction=args.test_fraction, 
             n_jobs=os.cpu_count() - 1, 
             transforms=transforms
         )
@@ -182,22 +182,22 @@ def load_dataset(args):
     elif args.dataset == 'Heart':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_heart(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
+        split_map, client_datasets, args = fetch_heart(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)
     
     elif args.dataset == 'Adult':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_adult(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
+        split_map, client_datasets, args = fetch_adult(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)
     
     elif args.dataset == 'Cover':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)  
+        split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)  
     
     elif args.dataset == 'GLEAM':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction, seq_len=args.seq_len)
+        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction, seq_len=args.seq_len)
 
     else: # x) for a dataset with no support yet or incorrectly entered...
         err = f'[LOAD] Dataset `{args.dataset}` is not supported or seems incorrectly entered... please check!'
@@ -237,9 +237,8 @@ def load_dataset(args):
                 [
                     (raw_train, idx, sample_indices) for idx, sample_indices in tqdm(
                         enumerate(split_map.values()),
-                        desc=f'[SIMULATE] ......create client datasets!',
-                        file=TqdmToLogger(logger),
-                        total=len(split_map)
+                        total=len(split_map),
+                        leave=False
                     )
                 ]
             )

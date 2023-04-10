@@ -1,11 +1,14 @@
 import io
 import os
+import ray
 import sys
 import torch
 import random
 import logging
 
 import numpy as np
+
+from tqdm import tqdm
 from multiprocessing import Process
 
 logger = logging.getLogger(__name__)
@@ -23,6 +26,22 @@ class Range:
     def __eq__(self, other):
         return self.start <= other <= self.end
 
+#####################
+# Arguments checker #
+#####################
+def check_args(args):
+    # check optimizer
+    if args.optimizer not in torch.optim.__dict__.keys():
+        err = f'`{args.optimizer}` is not a submodule of `torch.optim`... please check!'
+        logger.exception(err)
+        raise AssertionError(err)
+    
+    # check criterion
+    if args.criterion not in torch.nn.__dict__.keys():
+        err = f'`{args.criterion}` is not a submodule of `torch.nn`... please check!'
+        logger.exception(err)
+        raise AssertionError(err)
+
 ########
 # Seed #
 ########
@@ -38,21 +57,6 @@ def set_seed(seed):
     
     logger.info(f'[SEED] ...seed is set ({seed})!')
     
-##################
-# Logging Add-on #
-##################
-class TqdmToLogger(io.StringIO):
-    def __init__(self, logger):
-        super(TqdmToLogger, self).__init__()
-        self.logger = logger
-        self.level = logging.INFO
-        
-    def write(self, buf):
-        self.buf = buf.strip('\r\n\t ')
-        
-    def flush(self):
-        self.logger.log(level=self.level, msg=self.buf)   
-        
 ###############
 # TensorBaord #
 ###############
@@ -100,3 +104,52 @@ class TensorboardServer(Process):
             os.system(f'taskkill /IM "tensorboard.exe" /F')
         elif self.os_name == 'posix':
             os.system('pgrep -f tensorboard | xargs kill -9')
+
+#########################
+# Weight initialization #
+#########################
+def init_weights(model, init_type, init_gain):
+    """Initialize network weights.
+
+    Args:
+        model (torch.nn.Module): network to be initialized
+        init_type (string): the name of an initialization method: normal | xavier | xavier_uniform | kaiming | orthogonal | none
+        init_gain (float): scaling factor for normal, xavier and orthogonal
+
+    Returns:
+        model (torch.nn.Module): initialized model with `init_type` and `init_gain`
+    """
+    def init_func(m):  # define the initialization function
+        classname = m.__class__.__name__
+        if classname.find('BatchNorm2d') != -1:
+            if hasattr(m, 'weight') and m.weight is not None:
+                torch.nn.init.normal_(m.weight.data, mean=1.0, std=init_gain)
+            if hasattr(m, 'bias') and m.bias is not None:
+                torch.nn.init.constant_(m.bias.data, 0.0)
+        elif hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
+            if init_type == 'normal':
+                torch.nn.init.normal_(m.weight.data, mean=0.0, std=init_gain)
+            elif init_type == 'xavier':
+                torch.nn.init.xavier_normal_(m.weight.data, gain=init_gain)
+            elif init_type == 'xavier_uniform':
+                torch.nn.init.xavier_uniform_(m.weight.data, gain=1.0)
+            elif init_type == 'kaiming':
+                torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+            elif init_type == 'orthogonal':
+                torch.nn.init.orthogonal_(m.weight.data, gain=init_gain)
+            elif init_type == 'none':  # uses pytorch's default init method
+                m.reset_parameters()
+            else:
+                raise NotImplementedError(f'[ERROR] Initialization method {init_type} is not implemented!')
+            if hasattr(m, 'bias') and m.bias is not None:
+                torch.nn.init.constant_(m.bias.data, 0.0)
+    model.apply(init_func)
+    return model
+
+###########################
+# `tqdm` add-on for `ray` #
+###########################
+def to_iterator(obj_ids):
+    while obj_ids:
+        done, obj_ids = ray.wait(obj_ids)
+        yield ray.get(done[0])

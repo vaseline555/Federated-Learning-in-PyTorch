@@ -1,6 +1,6 @@
 import logging
 
-from .utils import set_seed, Range, TensorBoardRunner
+from .utils import set_seed, Range, TensorBoardRunner, check_args, init_weights, to_iterator
 from .loaders import load_dataset, load_model
 
 # for logger initialization
