@@ -45,28 +45,12 @@ def main(args, writer):
     
     # federated learning
     for curr_round in range(args.R):
-        selected_indices = server.update()
+        server.update()
         if curr_round % args.eval_every == 1:
-            server.evaluate(selected_indices)
+            server.evaluate()
         server._round += 1
-    server.wrap_up()
-
-    # save results (losses and metrics)
-    """ 아래 내용 전부 server 내부 기능으로 삽입
-    with open(os.path.join(args.result_path, f'{args.exp_name}_results.pkl'), 'wb') as result_file:
-        arguments = {'arguments': {str(arg): getattr(args, arg) for arg in vars(args)}}
-        results = {'results': {key: value for key, value in central_server.results.items() if len(value) > 0}}
-        json.dump({**arguments, **results}, result_file, indent=4)
-    
-    # save checkpoints
-    checkpoint = server.global_model.state_dict()
-
-    # save checkpoints
-    torch.save(checkpoint, os.path.join(args.result_path, f'{args.exp_name}_ckpt.pt'))
-    """
-    # close writer
-    if writer is not None:
-        writer.close()
+    else:
+        server.finalize()
     
 
     

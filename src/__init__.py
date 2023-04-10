@@ -27,4 +27,13 @@ def set_logger(path, args):
     for arg in vars(args):
         logger.info(f'[CONFIG] - {str(arg).upper()}: {getattr(args, arg)}')
     else:
-        print('\n')
+        welcome_message = """\n
+        _______ _______ ______  _______  ______ _______ _______ _______ ______ 
+        |______ |______ |     \ |______ |_____/ |_____|    |    |______ |     \\
+        |       |_______|_____/_|_______|__ _\_ |_ ___|_ __|  _ |______ |_____/
+            |      |______ |_____| |_____/ | \  |   |   | \  | |  ____        
+            |_____ |______ |     | |    \_ |  \_| __|__ |  \_| |_____|        
+                                                                        
+                            By. vaseline555 (Seok-Ju Hahn)
+        """
+        logger.info(welcome_message)
