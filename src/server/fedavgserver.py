@@ -171,6 +171,8 @@ class Server(BaseServer):
 
     def _request(self, ids, eval=False, participated=False):
         def __update_clients(client):
+            self.args.lr *= self.args.lr_decay
+            client.lr = self.args.lr
             update_result = client.update()
             return {client.id: len(client.training_set)}, {client.id: update_result}
 
@@ -302,8 +304,16 @@ class Server(BaseServer):
         gen_gap = defaultdict(dict)
         curr_res = self.results[self.round]
         for key in ['loss', 'acc']:
-            for contents in curr_res['clients_evaluated_out'][key].keys():
-                gen_gap[f'gen_gap_{key}'][contents] = curr_res['clients_evaluated_out'][key][contents] - curr_res['clients_evaluated_in'][key][contents]
+            for name in curr_res['clients_evaluated_out'][key].keys():
+                if ['equal', 'weighted'] in name:
+                    gap = curr_res['clients_evaluated_out'][key][name] - curr_res['clients_evaluated_in'][key][name]
+                    gen_gap[f'gen_gap_{key}'][name] = gap
+                    if self.writer is not None:
+                        self.writer.add_scalars(
+                            f'{key.title()} Generalization Gap',
+                            {name: gap},
+                            self.round
+                        )
         else:
             self.results[self.round]['generalization_gap'] = dict(gen_gap)
 
