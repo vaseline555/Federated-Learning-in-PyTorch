@@ -1,15 +1,16 @@
 import os
 import sys
-import ray
 import time
 import torch
 import argparse
-import traceback
 import transformers
+
+
+from importlib import import_module
+from torch.utils.tensorboard import SummaryWriter
 
 from src import Range, set_logger, TensorBoardRunner, set_seed, load_dataset, check_args
 from src.loaders import load_dataset, load_model
-from src.server import Server
 
 
 
@@ -25,9 +26,6 @@ def main(args, writer):
 
     # turn off unnecessary logging
     transformers.logging.set_verbosity_error()
-
-    # init ray
-    ray.init(num_cpus=os.cpu_count() - 1, num_gpus=1, ignore_reinit_error=True, logging_level='error')
     
     # get dataset
     server_dataset, client_datasets = load_dataset(args)
@@ -41,15 +39,22 @@ def main(args, writer):
     model, args = load_model(args)
 
     # create central server
-    server = Server(args, writer, server_dataset, client_datasets, model)
+    server_class = import_module(f'src.server.{args.algorithm}server').__dict__['Server']
+    server = server_class(args, writer, server_dataset, client_datasets, model)
     
     # federated learning
-    for curr_round in range(args.R):
-        server.update()
+    for curr_round in range(1, args.R + 1):
+        ## update round indicator
+        server.round = curr_round
+
+        ## update after sampling clients randomly
+        selected_ids = server.update() 
+
+        ## evaluate on clients not sampled (for measuring generalization performance)
         if curr_round % args.eval_every == 1:
-            server.evaluate()
-        server._round += 1
+            server.evaluate(excluded_ids=selected_ids)
     else:
+        ## wrap-up
         server.finalize()
     
 
@@ -131,7 +136,7 @@ if __name__ == "__main__":
     parser.add_argument('--embedding_size', help='embedding dimension of language models', type=int, default=512)
     parser.add_argument('--init_type', help='weight initialization\
         [ normal | xavier | kaiming | orthogonal ]', type=str, default='xavier', choices=['normal', 'xavier', 'kaiming', 'orthogonal'])
-    parser.add_argument('--init_gain', type=float, default=0.02, help='magnitude of variance used for weight initialization')
+    parser.add_argument('--init_gain', type=float, default=1.0, help='magnitude of variance used for weight initialization')
     
     ######################
     # Learning arguments #
@@ -149,14 +154,14 @@ if __name__ == "__main__":
         choices=['local', 'global', 'both'],
         required=True
     )
-    parser.add_argument('--eval_fraction', help='fraction of randomly selected clients for evaluation (for `eval_type` is `local` or `both`; evaluate for all clients when zero is passed)', type=float, choices=[Range(0., 1.)], default=0.2)
-    parser.add_argument('--eval_every', help='frequency of the evaluation (i.e., evaluate peformance of a model every `eval_every` round)', type=int, default=100)
-    parser.add_argument('--C', help='sampling fraction of clietns per round (full participation when zero is passed)', type=float, choices=[Range(0., 1.)], default=0.01)
+    parser.add_argument('--eval_fraction', help='fraction of randomly selected clients for evaluation (for `eval_type` is `local` or `both`)', type=float, choices=[Range(1e-8, 1.)], default=1.)
+    parser.add_argument('--eval_every', help='frequency of the evaluation (i.e., evaluate peformance of a model every `eval_every` round)', type=int, default=10)
+    parser.add_argument('--C', help='sampling fraction of clietns per round (full participation when zero is passed)', type=float, choices=[Range(1e-8, 1.)], default=0.1)
     parser.add_argument('--K', help='number of total cilents participating in federated training', type=int, default=100)
-    parser.add_argument('--R', help='number of total rounds', type=int, default=1000)
+    parser.add_argument('--R', help='number of total rounds', type=int, default=500)
     parser.add_argument('--E', help='number of local epochs', type=int, default=5)
     parser.add_argument('--B', help='batch size for local update in each client (full-batch training when zero is passed)', type=int, default=10)
-    parser.add_argument('--beta', help='momentum update for the global model aggregation at the server', type=float, default=0.99)
+    parser.add_argument('--beta', help='global momentum factor for an update of a global model when aggregated at the server', type=float, choices=[Range(0., 1.)], default=0.01)
     
     # optimization arguments
     parser.add_argument('--optimizer', help='type of optimization method (should be a module of `torch.optim`)', type=str, default='SGD')
@@ -172,53 +177,33 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # check arguments
-    check_args(args)
+    args = check_args(args)
 
     # make path for saving losses & metrics & models
     curr_time = time.strftime("%y%m%d_%H%M%S", time.localtime())
-    args.exp_name = f'{args.exp_name}_{curr_time}'
-    if not os.path.exists(os.path.join(args.result_path, args.exp_name)):
-        os.makedirs(os.path.join(args.result_path, args.exp_name))
+    args.exp_name = f'{args.exp_name}_{args.seed}_{args.dataset.lower()}_{args.model_name.lower()}'
+    if not os.path.exists(os.path.join(args.result_path, f'{args.exp_name}_{curr_time}')):
+        os.makedirs(os.path.join(args.result_path, f'{args.exp_name}_{curr_time}'))
         
     # make path for saving logs
     if not os.path.exists(args.log_path):
-        if args.use_tb:
-            os.makedirs(os.path.join(args.log_path, args.exp_name))
-        else:
-            os.makedirs(args.log_path)
+        os.makedirs(args.log_path)
     
     # initialize logger
     set_logger(f'{args.log_path}/{args.exp_name}_{curr_time}.log', args)
-
+    
     # run main program
-    try:
-        if args.use_tb: # run TensorBaord for tracking losses and metrics
-            writer = torch.utils.tensorboard.SummaryWriter(
-                log_dir=os.path.join(args.log_path, args.exp_name), 
-                filename_suffix=str(args.seed)
-            )
-            tb = TensorBoardRunner(os.path.join(args.log_path, args.exp_name), args.tb_host, args.tb_port)
-        else:
-            writer = None
-
-        # run main program
+    if args.use_tb: # run TensorBaord for tracking losses and metrics
+        writer = SummaryWriter(
+            log_dir=os.path.join(args.log_path, f'{args.exp_name}_{curr_time}'), 
+            filename_suffix=f'_{curr_time}'
+        )
+        tb = TensorBoardRunner(os.path.join(args.log_path, f'{args.exp_name}_{curr_time}'), args.tb_host, args.tb_port)
         main(args, writer)
-        
-        # finish TensorBoard
-        if args.use_tb:
-            tb.finalize()
-            
-        # bye!
-        time.sleep(1.0)
-        sys.exit(0)
-        
-    except Exception as err:
-        print(traceback.format_exc())
-        
-        # interrupt TensorBoard
-        if args.use_tb:
-            tb.interrupt()
-            
-        # oops!
-        time.sleep(1.0)
-        sys.exit(1)
+        tb.finalize()
+    else:
+        main(args, None)
+
+    # bye!
+    time.sleep(1.0)
+    sys.exit(0)

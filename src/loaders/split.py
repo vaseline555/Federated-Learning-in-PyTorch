@@ -1,9 +1,7 @@
-import torch
 import logging
 import numpy as np
 
-from tqdm import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
+from src import TqdmToLogger
 
 logger = logging.getLogger(__name__)
 
@@ -76,30 +74,33 @@ def simulate_split(args, dataset):
 
         # assign divided shards to clients
         assigned_shards = []
-        with logging_redirect_tqdm():
-            for _ in tqdm(range(args.K), desc='[SIMULATE] ......split data into pathological non-IID!'):
-                # update selection proability according to the count of reamining shards
-                # i.e., do NOT sample from class having no remaining shards
-                selection_prob = np.where(np.array(list(class_shards_counts.values())) > 0, 1., 0.)
-                selection_prob /= sum(selection_prob)
-                
-                # select classes to be considered
-                try:
-                    selected_classes = np.random.choice(args.num_classes, args.mincls, replace=False, p=selection_prob)
-                except: # if shard size is not fit enough, some clients may inevitably have samples from classes less than the number of `mincls`
-                    selected_classes = np.random.choice(args.num_classes, args.mincls, replace=True, p=selection_prob)
-                
-                # assign shards in randomly selected classes to current client
-                for it, class_idx in enumerate(selected_classes):
-                    selected_shard_indices = np.random.choice(len(split_indices[class_idx]), 1)[0]
-                    selected_shards = split_indices[class_idx].pop(selected_shard_indices)
-                    if it == 0:
-                        assigned_shards.append([selected_shards])
-                    else:
-                        assigned_shards[-1].append(selected_shards)
-                    class_shards_counts[class_idx] -= 1
+        for _ in TqdmToLogger(
+            range(args.K), 
+            logger=logger,
+            desc='[SIMULATE] ...assigning to clients... '
+            ):
+            # update selection proability according to the count of reamining shards
+            # i.e., do NOT sample from class having no remaining shards
+            selection_prob = np.where(np.array(list(class_shards_counts.values())) > 0, 1., 0.)
+            selection_prob /= sum(selection_prob)
+            
+            # select classes to be considered
+            try:
+                selected_classes = np.random.choice(args.num_classes, args.mincls, replace=False, p=selection_prob)
+            except: # if shard size is not fit enough, some clients may inevitably have samples from classes less than the number of `mincls`
+                selected_classes = np.random.choice(args.num_classes, args.mincls, replace=True, p=selection_prob)
+            
+            # assign shards in randomly selected classes to current client
+            for it, class_idx in enumerate(selected_classes):
+                selected_shard_indices = np.random.choice(len(split_indices[class_idx]), 1)[0]
+                selected_shards = split_indices[class_idx].pop(selected_shard_indices)
+                if it == 0:
+                    assigned_shards.append([selected_shards])
                 else:
-                    assigned_shards[-1] = np.concatenate(assigned_shards[-1])
+                    assigned_shards[-1].append(selected_shards)
+                class_shards_counts[class_idx] -= 1
+            else:
+                assigned_shards[-1] = np.concatenate(assigned_shards[-1])
 
         # construct a hashmap
         split_map = {k: assigned_shards[k] for k in range(args.K)}
@@ -139,41 +140,44 @@ def simulate_split(args, dataset):
 
         # assign divided shards to clients
         assigned_indices = []
-        with logging_redirect_tqdm():
-            for k in tqdm(range(args.K), desc='[SIMULATE] ......split data into Dirichlet-based non-IID!'):
-                # update mask according to the count of reamining samples per class
-                # i.e., do NOT sample from class having no remaining samples
-                remaining_mask = np.where(np.array(list(class_samples_counts.values())) > 0, 1., 0.)
-                selected_counts = sample_with_mask(remaining_mask, ideal_samples_counts, args.cncntrtn, args.num_classes)
+        for k in TqdmToLogger(
+            range(args.K), 
+            logger=logger,
+            desc='[SIMULATE] ...assigning to clients... '
+            ):
+            # update mask according to the count of reamining samples per class
+            # i.e., do NOT sample from class having no remaining samples
+            remaining_mask = np.where(np.array(list(class_samples_counts.values())) > 0, 1., 0.)
+            selected_counts = sample_with_mask(remaining_mask, ideal_samples_counts, args.cncntrtn, args.num_classes)
 
-                # check if enough samples exist per selected class
+            # check if enough samples exist per selected class
+            expected_counts = np.subtract(np.array(list(class_samples_counts.values())), selected_counts)
+            valid_mask = np.where(expected_counts < 0, 1., 0.)
+            
+            # if not, resample until enough samples are secured
+            while sum(valid_mask) > 0:
+                # resample from other classes instead of currently selected ones
+                adjusted_mask = (remaining_mask.astype(bool) & (~valid_mask.astype(bool))).astype(float)
+                
+                # calculate again if enoush samples exist or not
+                selected_counts = sample_with_mask(adjusted_mask, ideal_samples_counts, args.cncntrtn, args.num_classes, need_adjustment=True)    
                 expected_counts = np.subtract(np.array(list(class_samples_counts.values())), selected_counts)
+
+                # update mask for checking a termniation condition
                 valid_mask = np.where(expected_counts < 0, 1., 0.)
                 
-                # if not, resample until enough samples are secured
-                while sum(valid_mask) > 0:
-                    # resample from other classes instead of currently selected ones
-                    adjusted_mask = (remaining_mask.astype(bool) & (~valid_mask.astype(bool))).astype(float)
-                    
-                    # calculate again if enoush samples exist or not
-                    selected_counts = sample_with_mask(adjusted_mask, ideal_samples_counts, args.cncntrtn, args.num_classes, need_adjustment=True)    
-                    expected_counts = np.subtract(np.array(list(class_samples_counts.values())), selected_counts)
-
-                    # update mask for checking a termniation condition
-                    valid_mask = np.where(expected_counts < 0, 1., 0.)
-                    
-                # assign shards in randomly selected classes to current client
-                indices = []
-                for it, counts in enumerate(selected_counts):
-                    # get indices from the selected class
-                    selected_indices = class_indices[it][:counts]
-                    indices.extend(selected_indices)
-                    
-                    # update indices and statistics
-                    class_indices[it] = class_indices[it][counts:]
-                    class_samples_counts[it] -= counts
-                else:
-                    assigned_indices.append(indices)
+            # assign shards in randomly selected classes to current client
+            indices = []
+            for it, counts in enumerate(selected_counts):
+                # get indices from the selected class
+                selected_indices = class_indices[it][:counts]
+                indices.extend(selected_indices)
+                
+                # update indices and statistics
+                class_indices[it] = class_indices[it][counts:]
+                class_samples_counts[it] -= counts
+            else:
+                assigned_indices.append(indices)
 
         # construct a hashmap
         split_map = {k: assigned_indices[k] for k in range(args.K)}

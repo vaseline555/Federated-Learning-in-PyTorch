@@ -1,11 +1,10 @@
-import io
 import os
+import io
 import ray
 import sys
 import torch
 import random
 import logging
-
 import numpy as np
 
 from tqdm import tqdm
@@ -41,6 +40,11 @@ def check_args(args):
         err = f'`{args.criterion}` is not a submodule of `torch.nn`... please check!'
         logger.exception(err)
         raise AssertionError(err)
+
+    # check algorithm
+    if args.algorithm == 'fedsgd':
+        args.E = 1
+    return args
 
 ########
 # Seed #
@@ -105,6 +109,32 @@ class TensorboardServer(Process):
         elif self.os_name == 'posix':
             os.system('pgrep -f tensorboard | xargs kill -9')
 
+###############
+# tqdm add-on #
+###############
+class TqdmToLogger(tqdm):
+    def __init__(self, *args, logger=None, 
+    mininterval=0.1, 
+    bar_format='{desc:<}{percentage:3.0f}%|{bar:10}{r_bar}', 
+    desc=None, 
+    **kwargs
+    ):
+        self._logger = logger
+        super().__init__(*args, mininterval=mininterval, bar_format=bar_format, desc=desc, **kwargs)
+
+    @property
+    def logger(self):
+        if self._logger is not None:
+            return self._logger
+        return logger
+
+    def display(self, msg=None, pos=None):
+        if not self.n:
+            return
+        if not msg:
+            msg = self.__str__()
+        self.logger.info('%s', msg.strip('\r\n\t '))
+
 #########################
 # Weight initialization #
 #########################
@@ -144,12 +174,3 @@ def init_weights(model, init_type, init_gain):
             if hasattr(m, 'bias') and m.bias is not None:
                 torch.nn.init.constant_(m.bias.data, 0.0)
     model.apply(init_func)
-    return model
-
-###########################
-# `tqdm` add-on for `ray` #
-###########################
-def to_iterator(obj_ids):
-    while obj_ids:
-        done, obj_ids = ray.wait(obj_ids)
-        yield ray.get(done[0])

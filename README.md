@@ -24,4 +24,3 @@ An unofficial implementation of `FederatedAveraging` (or `FedAvg`) algorithm pro
 - [ ] More experiments with other hyperparameter settings (e.g., different combinations of B, E, K, and C)
 - [ ] Support strucuted datasets suitable for FL from LibSVM, UCI ML repository, KDD cup, etc.
 - [ ] FedSGD support
-- [ ] Transplant `ray` module for parallel processing of client training & evaluation

@@ -1,6 +1,6 @@
 import logging
 
-from .utils import set_seed, Range, TensorBoardRunner, check_args, init_weights, to_iterator
+from .utils import set_seed, Range, TensorBoardRunner, check_args, init_weights, TqdmToLogger
 from .loaders import load_dataset, load_model
 
 # for logger initialization
@@ -11,7 +11,6 @@ def set_logger(path, args):
         fmt='[%(levelname)s] (%(asctime)s) %(message)s',
         datefmt='%Y/%m/%d %I:%M:%S %p'
     )
-    
     stream_handler = logging.StreamHandler()
     file_handler = logging.FileHandler(path)
     
@@ -27,12 +26,13 @@ def set_logger(path, args):
     for arg in vars(args):
         logger.info(f'[CONFIG] - {str(arg).upper()}: {getattr(args, arg)}')
     else:
-        welcome_message = """\n
+        print('')
+        welcome_message = """
         _______ _______ ______  _______  ______ _______ _______ _______ ______ 
         |______ |______ |     \ |______ |_____/ |_____|    |    |______ |     \\
         |       |_______|_____/_|_______|__ _\_ |_ ___|_ __|  _ |______ |_____/
-            |      |______ |_____| |_____/ | \  |   |   | \  | |  ____        
-            |_____ |______ |     | |    \_ |  \_| __|__ |  \_| |_____|        
+         |      |______ |_____| |_____/ | \  |   |   | \  | |  ____        
+         |_____ |______ |     | |    \_ |  \_| __|__ |  \_| |_____|        
                                                                         
                             By. vaseline555 (Seok-Ju Hahn)
         """

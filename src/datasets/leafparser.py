@@ -5,14 +5,12 @@ import json
 import torch
 import logging
 import importlib
+import concurrent.futures
 
-import numpy as np
-
-from tqdm import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
 from abc import abstractmethod
-from multiprocessing import pool
+from collections import ChainMap
 
+from src import TqdmToLogger
 from src.datasets.leaf import *
 
 logger = logging.getLogger(__name__)
@@ -171,12 +169,18 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
             # transplant transform method
             tr_dset.transform = transforms[0]
             te_dset.transform = transforms[1]
-            return (tr_dset, te_dset)
+            return {user: (tr_dset, te_dset)}
         
-        with pool.ThreadPool(processes=n_jobs) as workhorse:
-            with logging_redirect_tqdm():
-                datasets = workhorse.starmap(_construct_dataset, [(idx, user) for idx, user in tqdm(enumerate(raw_train['users']), leave=False)])
-        return datasets
+        datasets = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 1) as workhorse:
+            for idx, user in TqdmToLogger(
+                enumerate(raw_train['users']), 
+                logger=logger, 
+                desc=f'[LOAD] [LEAF - {dataset_name.upper()}] ...assigning... ',
+                total=len(raw_train['users'])
+                ):
+                datasets.append(workhorse.submit(_construct_dataset, idx, user).result()) 
+        return dict(ChainMap(*datasets))
     
     # retrieve appropriate dataset module
     dataset_class = getattr(sys.modules[__name__], dataset_name)

@@ -1,35 +1,25 @@
 import torch
 import inspect
 
+from .baseclient import BaseClient
 
 
-class Client:
+
+class Client(BaseClient):
     """Class for client object having its own (private) data and resources to train a model.
     """
-    def __init__(self, args, client_id, training_set, test_set):
+    def __init__(self, args, training_set, test_set):
         """Client object is initiated by the center server."""
+        super().__init__()
         self.args = args
-        self.identifier = client_id
         self.training_set = training_set
         self.test_set = test_set
-        self.__model = None
         
         self.optim = torch.optim.__dict__[self.args.optimizer]
         self.criterion = torch.nn.__dict__[self.args.criterion]
 
-        self.train_loader = self._create_dataloader(self.training_set)
-        self.test_loader = self._create_dataloader(self.test_set)
-
-    @property
-    def model(self):
-        return self.__model
-
-    @model.setter
-    def model(self, model):
-        self.__model = model
-
-    def __len__(self):
-        return len(self.training_set)
+        self.train_loader = self._create_dataloader(self.training_set, shuffle=not self.args.no_shuffle)
+        self.test_loader = self._create_dataloader(self.test_set, shuffle=False)
 
     def _refine_optim_args(self, args):
         required_args = inspect.getfullargspec(self.optim)[0]
@@ -41,13 +31,13 @@ class Client:
                 refined_args[argument] = getattr(args, argument)
         return refined_args
 
-    def _create_dataloader(self, dataset):
-        return torch.utils.data.DataLoader(dataset=dataset, batch_size=self.args.B, shuffle=not self.args.no_shuffle)
+    def _create_dataloader(self, dataset, shuffle):
+        return torch.utils.data.DataLoader(dataset=dataset, batch_size=self.args.B, shuffle=shuffle)
 
     def update(self):
         self.model.train()
         self.model.to(self.args.device)
-
+        
         update_results = dict()
         optimizer = self.optim(self.model.parameters(), **self._refine_optim_args(self.args))
         for e in range(self.args.E):
@@ -57,7 +47,8 @@ class Client:
                 outputs = self.model(inputs)
                 loss = self.criterion()(outputs, targets)
 
-                optimizer.zero_grad()
+                for param in self.model.parameters():
+                    param.grad = None
                 loss.backward()
                 optimizer.step()
 
@@ -65,15 +56,14 @@ class Client:
                 corrects += (outputs.argmax(1) == targets).sum().item()
             else:
                 epoch_loss, epoch_acc = losses / len(self.training_set), corrects / len(self.training_set)
-                update_results[e + 1] = {'loss': epoch_loss, 'acc': epoch_acc}
+                update_results[e + 1] = {'loss': epoch_loss, 'metrics': {'accuracy': epoch_acc}}
         return update_results
-          
+
     @torch.inference_mode()
     def evaluate(self):
         self.model.eval()
         self.model.to(self.args.device)
 
-        eval_results = dict()
         losses, corrects = 0., 0.
         for inputs, targets in self.test_loader:
             inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
@@ -83,9 +73,18 @@ class Client:
             losses += len(outputs) * loss.item()
             corrects += (outputs.argmax(1) == targets).sum().item()
         else:
-            epoch_loss, epoch_acc = losses / len(self.test_set), corrects / len(self.test_set)
-            eval_results = {'loss': epoch_loss, 'acc': epoch_acc}
+            total_loss, total_acc = losses / len(self.test_set), corrects / len(self.test_set)
+            eval_results = {'loss': total_loss, 'metrics': {'accuracy': total_acc}}
         return eval_results
 
+    def download(self, model):
+        self.model.load_state_dict(model.state_dict())       
+
+    def upload(self):
+        return self.model.state_dict()
+    
+    def __len__(self):
+        return len(self.training_set), len(self.test_set)
+
     def __repr__(self):
-        return f'CLIENT < {self.identifier} >'
+        return f'CLIENT < {self.id} >'

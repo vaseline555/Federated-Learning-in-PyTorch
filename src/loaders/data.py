@@ -4,12 +4,11 @@ import logging
 import torchtext
 import torchvision
 import transformers
+import concurrent.futures
 
-from tqdm import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
 from collections import ChainMap
-from multiprocessing import pool
 
+from src import TqdmToLogger
 from src.datasets import *
 from src.loaders.split import simulate_split
 
@@ -231,17 +230,15 @@ def load_dataset(args):
     # construct client datasets if None
     if client_datasets is None:
         logger.info(f'[SIMULATE] Create client datasets!')
-        with pool.ThreadPool(processes=os.cpu_count() - 1) as workhorse:
-            client_datasets = workhorse.starmap(
-                _construct_dataset, 
-                [
-                    (raw_train, idx, sample_indices) for idx, sample_indices in tqdm(
-                        enumerate(split_map.values()),
-                        total=len(split_map),
-                        leave=False
-                    )
-                ]
-            )
-        client_datasets = dict(ChainMap(*client_datasets)) # {client index: (training set, test set)}
-        logger.info(f'[SIMULATE] ...created client datasets!')
+        client_datasets = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.K, os.cpu_count() - 1)) as workhorse:
+            for idx, sample_indices in TqdmToLogger(
+                enumerate(split_map.values()), 
+                logger=logger, 
+                desc=f'[SIMULATE] ...creating client datasets... ',
+                total=len(split_map)
+                ):
+                client_datasets.append(workhorse.submit(_construct_dataset, raw_train, idx, sample_indices).result()) 
+        client_datasets = dict(ChainMap(*client_datasets)) # {client ID: (training set, test set)}
+        logger.info(f'[SIMULATE] ...successfully created client datasets!')
     return raw_test, client_datasets    

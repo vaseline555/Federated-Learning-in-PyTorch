@@ -1,8 +1,11 @@
+python==3.10.10
 torch==1.12.0
-torchvision==0.13.1
+torchvision==0.13.0
 torchtext==0.13.0
-numpy==1.23.5
-pandas==1.4.4
-sickit-learn==1.2.0
+tensorboard==2.12.1
+numpy==1.24.2
+pandas==1.5.3
+scikit-learn==1.2.2
 einops==0.6.0
-transformers==4.27.3
+transformers==4.27.4
+tqdm==4.65.0
