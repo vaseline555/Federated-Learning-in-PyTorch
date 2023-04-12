@@ -78,7 +78,7 @@ class Client(BaseClient):
         return eval_results
 
     def download(self, model):
-        self.model.load_state_dict(model.state_dict())       
+        self.model.load_state_dict(model.state_dict())    
 
     def upload(self):
         return self.model.state_dict()

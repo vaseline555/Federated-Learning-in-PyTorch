@@ -238,11 +238,19 @@ class Server(BaseServer):
             locally_updated_weights = self.clients[identifier].upload()
             for key in curr_state.keys():
                 if it == 0:
-                    new_state[key] = (1. - self.args.beta) * (coefficients[identifier] * locally_updated_weights[key])\
-                        + self.args.beta * (curr_state[key])
+                    new_state[key] = locally_updated_weights[key].mul(coefficients[identifier]).mul(
+                        1. - self.args.beta
+                        ).add(curr_state[key].mul(
+                            self.args.beta
+                            )
+                        )
                 else:
-                    new_state[key] += (1. - self.args.beta) * (coefficients[identifier] * locally_updated_weights[key])\
-                        + self.args.beta * (curr_state[key])
+                    new_state[key] += locally_updated_weights[key].mul(coefficients[identifier]).mul(
+                        1. - self.args.beta
+                        ).add(curr_state[key].mul(
+                            self.args.beta
+                            )
+                        )
         else: # update as a new server model
             self.model.load_state_dict(new_state)
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully aggregated into a new gloal model!')
@@ -304,19 +312,15 @@ class Server(BaseServer):
             self._central_evaluate()
 
         # calculate generalization gap
-        gen_gap = defaultdict(dict)
+        gen_gap = dict()
         curr_res = self.results[self.round]
-        for key in ['loss', 'acc']:
+        for key in curr_res['clients_evaluated_out'].keys():
             for name in curr_res['clients_evaluated_out'][key].keys():
                 if name in ['equal', 'weighted']:
                     gap = curr_res['clients_evaluated_out'][key][name] - curr_res['clients_evaluated_in'][key][name]
-                    gen_gap[f'gen_gap_{key}'][name] = gap
+                    gen_gap[f'gen_gap_{key}'] = {name: gap}
                     if self.writer is not None:
-                        self.writer.add_scalars(
-                            f'{key.title()} Generalization Gap',
-                            {name: gap},
-                            self.round
-                        )
+                        self.writer.add_scalars(f'{key.title()} Generalization Gap', gen_gap[f'gen_gap_{key}'], self.round)
         else:
             self.results[self.round]['generalization_gap'] = dict(gen_gap)
 

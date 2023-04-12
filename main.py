@@ -134,8 +134,7 @@ if __name__ == "__main__":
     parser.add_argument('--num_layers', help='number of layers in recurrent cells', type=int, default=2)
     parser.add_argument('--num_embeddings', help='size of embedding dictionary', type=int, default=1000)
     parser.add_argument('--embedding_size', help='embedding dimension of language models', type=int, default=512)
-    parser.add_argument('--init_type', help='weight initialization\
-        [ normal | xavier | kaiming | orthogonal ]', type=str, default='xavier', choices=['normal', 'xavier', 'kaiming', 'orthogonal'])
+    parser.add_argument('--init_type', help='weight initialization method', type=str, default='xavier', choices=['normal', 'xavier', 'kaiming', 'orthogonal'])
     parser.add_argument('--init_gain', type=float, default=1.0, help='magnitude of variance used for weight initialization')
     
     ######################
@@ -161,13 +160,13 @@ if __name__ == "__main__":
     parser.add_argument('--R', help='number of total rounds', type=int, default=500)
     parser.add_argument('--E', help='number of local epochs', type=int, default=5)
     parser.add_argument('--B', help='batch size for local update in each client (full-batch training when zero is passed)', type=int, default=10)
-    parser.add_argument('--beta', help='global momentum factor for an update of a global model when aggregated at the server', type=float, choices=[Range(0., 1.)], default=0.01)
+    parser.add_argument('--beta', help='global momentum factor for an update of a global model when aggregated at the server', type=float, choices=[Range(0., 1.)], default=0.)
     
     # optimization arguments
     parser.add_argument('--optimizer', help='type of optimization method (should be a module of `torch.optim`)', type=str, default='SGD')
     parser.add_argument('--no_shuffle', help='do not shuffle data (if passed)', action='store_true')
     parser.add_argument('--lr', help='learning rate for local updates in each client', type=float, choices=[Range(0., 100.)], default=0.01)
-    parser.add_argument('--lr_decay', help='learning rate decay applied per round', type=float, choices=[Range(0., 1.)], default=0.999)
+    parser.add_argument('--lr_decay', help='learning rate decay applied per round', type=float, choices=[Range(0., 1.)], default=1.)
     parser.add_argument('--weight_decay', help='weight decay (L2 penalty)', type=float, choices=[Range(0., 1.)], default=0)
     parser.add_argument('--momentum', help='momentum factor', type=float, choices=[Range(0., 1.)], default=0.9)
     parser.add_argument('--criterion', help='type of criterion for objective function (should be a submodule of `torch.nn`)', type=str, default='CrossEntropyLoss')
