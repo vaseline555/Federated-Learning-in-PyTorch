@@ -169,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', help='learning rate for local updates in each client', type=float, choices=[Range(0., 100.)], default=0.01)
     parser.add_argument('--lr_decay', help='learning rate decay applied per round', type=float, choices=[Range(0., 1.)], default=0.999)
     parser.add_argument('--weight_decay', help='weight decay (L2 penalty)', type=float, choices=[Range(0., 1.)], default=0)
-    parser.add_argument('--momentum', help='momentum factor', type=float, choices=[Range(0., 1.)], default=0.9)
+    parser.add_argument('--momentum', help='momentum factor', type=float, choices=[Range(0., 1.)], default=0.01)
     parser.add_argument('--criterion', help='type of criterion for objective function (should be a submodule of `torch.nn`)', type=str, default='CrossEntropyLoss')
     parser.add_argument('--mu', help='constant for proximity regularization term (for algorithms `fedprox`)', type=float, choices=[Range(0., 100)], default=0.01)
 
