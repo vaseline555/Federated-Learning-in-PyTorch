@@ -62,6 +62,10 @@ class BaseServer(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
+    def _adjust_lr(self):
+        raise NotImplementedError
+        
+    @abstractmethod
     def update(self):
         raise NotImplementedError
 

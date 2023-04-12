@@ -169,6 +169,9 @@ class Server(BaseServer):
         logger.info(total_log_string)
         return result_dict
 
+    def _adjust_lr(self):
+        pass
+
     def _request(self, ids, eval=False, participated=False):
         def __update_clients(client):
             self.args.lr *= self.args.lr_decay
@@ -305,7 +308,7 @@ class Server(BaseServer):
         curr_res = self.results[self.round]
         for key in ['loss', 'acc']:
             for name in curr_res['clients_evaluated_out'][key].keys():
-                if ['equal', 'weighted'] in name:
+                if name in ['equal', 'weighted']:
                     gap = curr_res['clients_evaluated_out'][key][name] - curr_res['clients_evaluated_in'][key][name]
                     gen_gap[f'gen_gap_{key}'][name] = gap
                     if self.writer is not None:
