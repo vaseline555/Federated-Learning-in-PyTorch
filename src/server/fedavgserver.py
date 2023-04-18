@@ -102,9 +102,13 @@ class FedavgServer(BaseServer):
             num_sampled_clients = max(int(self.args.C * self.args.K), 1)
             sampled_client_ids = sorted(random.sample(self.clients.keys(), num_sampled_clients))
         else: # randomly select unparticipated clients in amount of `eval_fraction` multiplied
-            num_unparticipated_clients = int((1. - self.args.C) * self.args.K)
-            num_sampled_clients = max(int(self.args.eval_fraction * num_unparticipated_clients), 1)
-            sampled_client_ids = sorted(random.sample([identifier for identifier in self.clients.keys() if identifier not in exclude], num_sampled_clients))
+            num_unparticipated_clients = max(int((1. - self.args.C) * self.args.K), 0)
+            if num_unparticipated_clients == 0: # when C = 1; evaluate on all clients!
+                num_sampled_clients = self.args.K
+                sampled_client_ids = sorted(self.clients.keys())
+            else:
+                num_sampled_clients = max(int(self.args.eval_fraction * num_unparticipated_clients), 1)
+                sampled_client_ids = sorted(random.sample([identifier for identifier in self.clients.keys() if identifier not in exclude], num_sampled_clients))
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...{num_sampled_clients} clients are selected!')
         return sampled_client_ids
 
@@ -236,6 +240,9 @@ class FedavgServer(BaseServer):
     
     def _aggregate(self, ids, updated_sizes):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Aggregate updated signals!')
+
+        # empty out buffer
+        self.server_optimizer.zero_grad()
 
         # calculate mixing coefficients according to sample sizes
         coefficients = {identifier: coefficient / sum(updated_sizes.values()) for identifier, coefficient in updated_sizes.items()}

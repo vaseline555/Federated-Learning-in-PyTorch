@@ -32,6 +32,8 @@ class FedavgClient(BaseClient):
         return refined_args
 
     def _create_dataloader(self, dataset, shuffle):
+        if self.args.B == 0 :
+            self.args.B = len(self.training_set)
         return torch.utils.data.DataLoader(dataset=dataset, batch_size=self.args.B, shuffle=shuffle)
     
     def update(self):

@@ -19,9 +19,9 @@ class FedavgOptimizer(BaseOptimizer, torch.optim.Optimizer):
         for group in self.param_groups:
             momentum = group['momentum']
             for param in group['params']:
-                if param.data is None:
+                if param.grad is None:
                     continue
-                delta = self.state[param].pop('accum')
+                delta = param.grad.data
                 if momentum > 0.:
                     if 'momentum_buffer' not in self.state[param]:
                         buffer = self.state[param]['momentum_buffer'] = torch.zeros_like(p).detach()
@@ -36,7 +36,7 @@ class FedavgOptimizer(BaseOptimizer, torch.optim.Optimizer):
     def accumulate(self, mixing_coefficient, local_param_iterator):
         for group in self.param_groups:
             for server_param, local_param in zip(group['params'], local_param_iterator):
-                if 'accum' not in self.state[server_param]:
-                    self.state[server_param]['accum'] = server_param.detach().sub(local_param.detach().mul(mixing_coefficient))
+                if server_param.grad is None:
+                    server_param.grad = server_param.data.sub(local_param.data).mul(mixing_coefficient)
                 else:
-                    self.state[server_param]['accum'].sub_(local_param.detach().mul(mixing_coefficient))
+                    server_param.grad.add_(server_param.data.sub(local_param.data).mul(mixing_coefficient))
