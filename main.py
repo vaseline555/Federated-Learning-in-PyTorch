@@ -1,16 +1,12 @@
 import os
-import sys
 import time
 import torch
 import argparse
-import transformers
-
 
 from importlib import import_module
 from torch.utils.tensorboard import SummaryWriter
 
-from src import Range, set_logger, TensorBoardRunner, set_seed, load_dataset, check_args
-from src.loaders import load_dataset, load_model
+from src import Range, set_logger, TensorBoardRunner, check_args, set_seed, load_dataset, load_model 
 
 
 
@@ -23,9 +19,6 @@ def main(args, writer):
     """
     # set seed for reproducibility
     set_seed(args.seed)
-
-    # turn off unnecessary logging
-    transformers.logging.set_verbosity_error()
     
     # get dataset
     server_dataset, client_datasets = load_dataset(args)
@@ -39,8 +32,8 @@ def main(args, writer):
     model, args = load_model(args)
 
     # create central server
-    server_class = import_module(f'src.server.{args.algorithm}server').__dict__['Server']
-    server = server_class(args, writer, server_dataset, client_datasets, model)
+    server_class = import_module(f'src.server.{args.algorithm}server').__dict__[f'{args.algorithm.title()}Server']
+    server = server_class(args=args, writer=writer, server_dataset=server_dataset, client_datasets=client_datasets, model=model)
     
     # federated learning
     for curr_round in range(1, args.R + 1):
@@ -51,14 +44,14 @@ def main(args, writer):
         selected_ids = server.update() 
 
         ## evaluate on clients not sampled (for measuring generalization performance)
-        if curr_round % args.eval_every == 1:
+        if curr_round % args.eval_every == 0:
             server.evaluate(excluded_ids=selected_ids)
     else:
         ## wrap-up
         server.finalize()
-    
 
     
+
 if __name__ == "__main__":
     # parse user inputs as arguments
     parser = argparse.ArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
@@ -154,21 +147,21 @@ if __name__ == "__main__":
         required=True
     )
     parser.add_argument('--eval_fraction', help='fraction of randomly selected clients for evaluation (for `eval_type` is `local` or `both`)', type=float, choices=[Range(1e-8, 1.)], default=1.)
-    parser.add_argument('--eval_every', help='frequency of the evaluation (i.e., evaluate peformance of a model every `eval_every` round)', type=int, default=10)
+    parser.add_argument('--eval_every', help='frequency of the evaluation (i.e., evaluate peformance of a model every `eval_every` round)', type=int, default=1)
     parser.add_argument('--C', help='sampling fraction of clietns per round (full participation when zero is passed)', type=float, choices=[Range(1e-8, 1.)], default=0.1)
     parser.add_argument('--K', help='number of total cilents participating in federated training', type=int, default=100)
-    parser.add_argument('--R', help='number of total rounds', type=int, default=500)
+    parser.add_argument('--R', help='number of total rounds', type=int, default=1000)
     parser.add_argument('--E', help='number of local epochs', type=int, default=5)
     parser.add_argument('--B', help='batch size for local update in each client (full-batch training when zero is passed)', type=int, default=10)
     parser.add_argument('--beta', help='global momentum factor for an update of a global model when aggregated at the server', type=float, choices=[Range(0., 1.)], default=0.)
     
     # optimization arguments
-    parser.add_argument('--optimizer', help='type of optimization method (should be a module of `torch.optim`)', type=str, default='SGD')
     parser.add_argument('--no_shuffle', help='do not shuffle data (if passed)', action='store_true')
-    parser.add_argument('--lr', help='learning rate for local updates in each client', type=float, choices=[Range(0., 100.)], default=0.01)
-    parser.add_argument('--lr_decay', help='learning rate decay applied per round', type=float, choices=[Range(0., 1.)], default=1.)
+    parser.add_argument('--optimizer', help='type of optimization method (should be a sub-module of `torch.optim`)', type=str, default='SGD')
     parser.add_argument('--weight_decay', help='weight decay (L2 penalty)', type=float, choices=[Range(0., 1.)], default=0)
-    parser.add_argument('--momentum', help='momentum factor', type=float, choices=[Range(0., 1.)], default=0.9)
+    parser.add_argument('--momentum', help='momentum factor', type=float, choices=[Range(0., 1.)], default=0.)
+    parser.add_argument('--lr', help='learning rate for local updates in each client', type=float, choices=[Range(0., 100.)], default=0.1)
+    parser.add_argument('--lr_decay', help='rate of learning rate decay applied per round', type=float, choices=[Range(0., 1.)], default=1.)
     parser.add_argument('--criterion', help='type of criterion for objective function (should be a submodule of `torch.nn`)', type=str, default='CrossEntropyLoss')
     parser.add_argument('--mu', help='constant for proximity regularization term (for algorithms `fedprox`)', type=float, choices=[Range(0., 100)], default=0.01)
 
@@ -181,8 +174,9 @@ if __name__ == "__main__":
     # make path for saving losses & metrics & models
     curr_time = time.strftime("%y%m%d_%H%M%S", time.localtime())
     args.exp_name = f'{args.exp_name}_{args.seed}_{args.dataset.lower()}_{args.model_name.lower()}'
-    if not os.path.exists(os.path.join(args.result_path, f'{args.exp_name}_{curr_time}')):
-        os.makedirs(os.path.join(args.result_path, f'{args.exp_name}_{curr_time}'))
+    args.result_path = os.path.join(args.result_path, f'{args.exp_name}_{curr_time}')
+    if not os.path.exists(args.result_path):
+        os.makedirs(args.result_path)
         
     # make path for saving logs
     if not os.path.exists(args.log_path):
@@ -202,7 +196,6 @@ if __name__ == "__main__":
         tb.finalize()
     else:
         main(args, None)
-
+    
     # bye!
-    time.sleep(1.0)
-    sys.exit(0)
+    os._exit(0)

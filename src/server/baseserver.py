@@ -38,6 +38,10 @@ class BaseServer(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
+    def _get_algorithm(self, model, **kwargs):
+        raise NotImplementedError
+
+    @abstractmethod
     def _create_clients(self, client_datasets):
         raise NotImplementedError
 
@@ -59,10 +63,6 @@ class BaseServer(metaclass=ABCMeta):
 
     @abstractmethod
     def _central_evaluate(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    def _adjust_lr(self):
         raise NotImplementedError
         
     @abstractmethod

@@ -5,12 +5,12 @@ from .baseclient import BaseClient
 
 
 
-class Client(BaseClient):
+class FedavgClient(BaseClient):
     """Class for client object having its own (private) data and resources to train a model.
     """
     def __init__(self, args, training_set, test_set):
         """Client object is initiated by the center server."""
-        super().__init__()
+        super(FedavgClient, self).__init__()
         self.args = args
         self.training_set = training_set
         self.test_set = test_set
@@ -33,7 +33,7 @@ class Client(BaseClient):
 
     def _create_dataloader(self, dataset, shuffle):
         return torch.utils.data.DataLoader(dataset=dataset, batch_size=self.args.B, shuffle=shuffle)
-
+    
     def update(self):
         self.model.train()
         self.model.to(self.args.device)
@@ -81,7 +81,7 @@ class Client(BaseClient):
         self.model.load_state_dict(model.state_dict())    
 
     def upload(self):
-        return self.model.state_dict()
+        return self.model.parameters()
     
     def __len__(self):
         return len(self.training_set), len(self.test_set)

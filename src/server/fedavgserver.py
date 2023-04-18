@@ -1,5 +1,6 @@
 import os
 import copy
+import json
 import torch
 import random
 import logging
@@ -7,7 +8,7 @@ import numpy as np
 import concurrent.futures
 
 from importlib import import_module
-from collections import ChainMap, OrderedDict, defaultdict
+from collections import ChainMap, defaultdict
 
 from src import init_weights, TqdmToLogger
 from .baseserver import BaseServer
@@ -16,13 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 
-class Server(BaseServer):
+class FedavgServer(BaseServer):
     """Centeral server orchestrating the whole process of federated learning.
     """
     def __init__(self, args, writer, server_dataset, client_datasets, model):
         self.args = args
         self.writer = writer
-        
+
         # round indicator
         self.round = 0
 
@@ -32,6 +33,12 @@ class Server(BaseServer):
 
         # model
         self.model = self._init_model(model)
+
+        # server aggregator
+        self.server_optimizer = self._get_algorithm(self.model, lr=self.args.lr, momentum=self.args.beta)
+
+        # lr scheduler
+        self.lr_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.server_optimizer, lr_lambda=lambda curr_round: self.args.lr_decay**curr_round)
 
         # clients
         self.clients = self._create_clients(client_datasets)
@@ -44,12 +51,16 @@ class Server(BaseServer):
         init_weights(model, self.args.init_type, self.args.init_gain)
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...sucessfully initialized the model ({self.args.model_name}; init type: {self.args.init_type.upper()})!')
         return model
+    
+    def _get_algorithm(self, model, **kwargs):
+        ALGORITHM_CLASS = import_module(f'..algorithm.{self.args.algorithm}', package=__package__).__dict__[f'{self.args.algorithm.title()}Optimizer']
+        return ALGORITHM_CLASS(params=model.parameters(), **kwargs)
 
     def _create_clients(self, client_datasets):
-        CLINET_CLASS = import_module(f'..client.{self.args.algorithm}client', package=__package__).__dict__['Client']
+        CLINET_CLASS = import_module(f'..client.{self.args.algorithm}client', package=__package__).__dict__[f'{self.args.algorithm.title()}Client']
 
         def __create_client(identifier, datasets):
-            client = CLINET_CLASS(self.args, *datasets)
+            client = CLINET_CLASS(args=self.args, training_set=datasets[0], test_set=datasets[-1])
             client.id, client.model = identifier, copy.deepcopy(self.model)
             return {identifier: client}
 
@@ -151,31 +162,30 @@ class Server(BaseServer):
             )
 
         # metrics
-        for name, values in metrics.items():
-            values = np.array(values).astype(float)
-            weighted = values.dot(num_samples) / sum(num_samples)
-            equal = values.mean()
-            std = values.std()
-            bottom = values.min()
+        for name, val in metrics.items():
+            val = np.array(val).astype(float)
+            weighted = val.dot(num_samples) / sum(num_samples)
+            equal = val.mean()
+            std = val.std()
+            bottom = val.min()
             total_log_string += f'\n    - {name.title()}: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Bottom ({bottom:.4f})'
             result_dict[name] = {'weighted': weighted, 'equal': equal, 'std': std, 'bottom': bottom}
             if self.writer is not None:
-                for name, values in metrics.items():
+                for name in metrics.keys():
                     self.writer.add_scalars(
                         f'Local {"Test" if eval else "Training"} {name.title()}' + eval * f'({"In" if participated else "Out"})',
                         {f'Weighted Average': weighted, f'Equal Average': equal, f'Bottom': bottom},
                         self.round
                     )
+                self.writer.flush()
+        
+        # log total message
         logger.info(total_log_string)
         return result_dict
 
-    def _adjust_lr(self):
-        pass
-
     def _request(self, ids, eval=False, participated=False):
         def __update_clients(client):
-            self.args.lr *= self.args.lr_decay
-            client.lr = self.args.lr
+            client.args.lr = self.lr_scheduler.get_last_lr()[-1]
             update_result = client.update()
             return {client.id: len(client.training_set)}, {client.id: update_result}
 
@@ -226,38 +236,21 @@ class Server(BaseServer):
     
     def _aggregate(self, ids, updated_sizes):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Aggregate updated signals!')
-        
-        # call current server model and create empty container
-        curr_state, new_state = self.model.state_dict(), OrderedDict()
 
         # calculate mixing coefficients according to sample sizes
         coefficients = {identifier: coefficient / sum(updated_sizes.values()) for identifier, coefficient in updated_sizes.items()}
-
-        # aggregate weights
-        for it, identifier in enumerate(ids):
-            locally_updated_weights = self.clients[identifier].upload()
-            for key in curr_state.keys():
-                if it == 0:
-                    new_state[key] = locally_updated_weights[key].mul(coefficients[identifier]).mul(
-                        1. - self.args.beta
-                        ).add(curr_state[key].mul(
-                            self.args.beta
-                            )
-                        )
-                else:
-                    new_state[key] += locally_updated_weights[key].mul(coefficients[identifier]).mul(
-                        1. - self.args.beta
-                        ).add(curr_state[key].mul(
-                            self.args.beta
-                            )
-                        )
-        else: # update as a new server model
-            self.model.load_state_dict(new_state)
+        
+        # accumulate weights
+        for identifier in ids:
+            locally_updated_weights_iterator = self.clients[identifier].upload()
+            self.server_optimizer.accumulate(coefficients[identifier], locally_updated_weights_iterator)
+        else:
+            self.server_optimizer.step()
+            self.lr_scheduler.step()
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully aggregated into a new gloal model!')
 
     @torch.inference_mode()
     def _central_evaluate(self):
-        #self.results[self.round]['server_evaluated'] = server_eval_result
         self.model.eval()
         self.model.to(self.args.device)
 
@@ -271,7 +264,28 @@ class Server(BaseServer):
             corrects += (outputs.argmax(1) == targets).sum().item()
         else:
             epoch_loss, epoch_acc = losses / len(self.server_dataset), corrects / len(self.server_dataset)
-            self.results[self.round]['server_evaluated']  = {'loss': epoch_loss, 'acc': epoch_acc}
+            result = {'loss': epoch_loss, 'metrics': {'accuracy': epoch_acc}}
+
+            # log result
+            server_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [EVALUATE] [SERVER] '
+
+            ## loss
+            loss = result['loss']
+            server_log_string += f'| loss: {loss:.4f} '
+            
+            ## metrics
+            for metric, value in result['metrics'].items():
+                server_log_string += f'| {metric}: {value:.4f} '
+            logger.info(server_log_string)
+
+            # log TensorBoard
+            if self.writer is not None:
+                self.writer.add_scalar('Server Loss', epoch_loss, self.round)
+                for name, value in result['metrics'].items():
+                    self.writer.add_scalar(f'Server {name.title()}', value, self.round)
+                else:
+                    self.writer.flush()
+            self.results[self.round]['server_evaluated'] = result
 
     def update(self):
         """Update the global model through federated learning.
@@ -288,7 +302,7 @@ class Server(BaseServer):
         # request evaluation to selected clients
         self._request(selected_ids, eval=True, participated=True)
 
-        # receive updates and aggregate into a new server model  
+        # receive updates and aggregate into a new server model 
         self._aggregate(selected_ids, updated_sizes)
         return selected_ids
 
@@ -320,26 +334,24 @@ class Server(BaseServer):
                     gap = curr_res['clients_evaluated_out'][key][name] - curr_res['clients_evaluated_in'][key][name]
                     gen_gap[f'gen_gap_{key}'] = {name: gap}
                     if self.writer is not None:
-                        self.writer.add_scalars(f'{key.title()} Generalization Gap', gen_gap[f'gen_gap_{key}'], self.round)
+                        self.writer.add_scalars(f'Generalization Gap ({key.title()})', gen_gap[f'gen_gap_{key}'], self.round)
+                        self.writer.flush()
         else:
             self.results[self.round]['generalization_gap'] = dict(gen_gap)
 
     def finalize(self):
-        """Save resulting figures and a trained model checkpoint. 
+        """Save results.
         """
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Save results and the global model checkpoint!')
+        # save figure
+        with open(os.path.join(self.args.result_path, f'{self.args.exp_name}.json'), 'w', encoding='utf8') as result_file:
+            results = {key: value for key, value in self.results.items()}
+            json.dump(results, result_file, indent=4)
 
-        """ 아래 내용 전부 server 내부 기능으로 삽입
-        with open(os.path.join(args.result_path, f'{args.exp_name}_results.pkl'), 'wb') as result_file:
-            arguments = {'arguments': {str(arg): getattr(args, arg) for arg in vars(args)}}
-            results = {'results': {key: value for key, value in central_server.results.items() if len(value) > 0}}
-            json.dump({**arguments, **results}, result_file, indent=4)
+        # save checkpoint
+        torch.save(self.model.state_dict(), os.path.join(self.args.result_path, f'{self.args.exp_name}.pt'))
         
-        # save checkpoints
-        checkpoint = server.global_model.state_dict()
-
-        # save checkpoints
-        torch.save(checkpoint, os.path.join(args.result_path, f'{args.exp_name}_ckpt.pt'))
-        """
         if self.writer is not None:
             self.writer.close()
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...finished federated learning!')
         

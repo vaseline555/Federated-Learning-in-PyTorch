@@ -19,7 +19,7 @@ class TwoCNN(torch.nn.Module): # McMahan et al., 2016; 1,663,370 parameters
             torch.nn.MaxPool2d(kernel_size=(2, 2), padding=1)
         )
         self.classifier = torch.nn.Sequential(
-            torch.nn.AdaptiveAvgPool2d((1, 1)),
+            torch.nn.AdaptiveAvgPool2d((7, 7)),
             torch.nn.Flatten(),
             torch.nn.Linear(in_features=(self.hidden_channels * 2) * (7 * 7), out_features=self.hidden_channels, bias=True),
             torch.nn.ReLU(True),
