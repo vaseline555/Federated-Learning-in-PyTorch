@@ -59,7 +59,7 @@ class FedavgServer(BaseServer):
 
         def __create_client(identifier, datasets):
             client = CLINET_CLASS(args=self.args, training_set=datasets[0], test_set=datasets[-1])
-            client.id, client.model = identifier, copy.deepcopy(self.model)
+            client.id = identifier
             return {identifier: client}
 
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Create clients!')
@@ -82,7 +82,8 @@ class FedavgServer(BaseServer):
             client.download(self.model)
         
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Broadcast the global model at the server!')
-
+        
+        self.model.to('cpu')
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
             for identifier in TqdmToLogger(
                 ids, 
@@ -116,7 +117,11 @@ class FedavgServer(BaseServer):
     def _log_results(self, resulting_sizes, results, eval, participated):
         losses, metrics, num_samples = list(), defaultdict(list), list()
         for identifier, result in results.items():
-            client_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDDATE"}] [CLIENT] < {str(identifier).zfill(8)} > '
+            if len(str(identifier)) > 8:
+                stdout_id = f'{str(identifier)[:6]}..'
+            else:
+                stdout_id = str(identifier).zfill(8)
+            client_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDDATE"}] [CLIENT] < {stdout_id} > '
 
             # get loss and metrics
             if eval:
@@ -156,12 +161,11 @@ class FedavgServer(BaseServer):
         weighted = losses.dot(num_samples) / sum(num_samples)
         equal = losses.mean()
         std = losses.std()
-        top = losses.max()
-        total_log_string += f'\n    - Loss: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Top ({top:.4f})'
-        result_dict['loss'] = {'weighted': weighted, 'equal': equal, 'std': std, 'top': top}
+        total_log_string += f'\n    - Loss: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) |'
+        result_dict['loss'] = {'weighted': weighted, 'equal': equal, 'std': std}
         self.writer.add_scalars(
             f'Local {"Test" if eval else "Training"} Loss ' + eval * f'({"In" if participated else "Out"})',
-            {f'Weighted Average': weighted, f'Equal Average': equal, f'Top': top},
+            {f'Weighted Average': weighted, f'Equal Average': equal},
             self.round
         )
 
@@ -171,13 +175,12 @@ class FedavgServer(BaseServer):
             weighted = val.dot(num_samples) / sum(num_samples)
             equal = val.mean()
             std = val.std()
-            bottom = val.min()
-            total_log_string += f'\n    - {name.title()}: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Bottom ({bottom:.4f})'
-            result_dict[name] = {'weighted': weighted, 'equal': equal, 'std': std, 'bottom': bottom}
+            total_log_string += f'\n    - {name.title()}: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) |'
+            result_dict[name] = {'weighted': weighted, 'equal': equal, 'std': std}
             for name in metrics.keys():
                 self.writer.add_scalars(
                     f'Local {"Test" if eval else "Training"} {name.title()}' + eval * f'({"In" if participated else "Out"})',
-                    {f'Weighted Average': weighted, f'Equal Average': equal, f'Bottom': bottom},
+                    {f'Weighted Average': weighted, f'Equal Average': equal},
                     self.round
                 )
             self.writer.flush()
@@ -250,6 +253,20 @@ class FedavgServer(BaseServer):
             self.server_optimizer.accumulate(coefficients[identifier], locally_updated_weights_iterator)
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully aggregated into a new gloal model!')
 
+    def _cleanup(self, indices):
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Clean up!')
+
+        # accumulate weights
+        for identifier in indices:
+            if self.clients[identifier].model is not None:
+                self.clients[identifier].model = None
+            else:
+                err = f'why clients ({identifier}) has no model? please check!'
+                logger.exception(err)
+                raise AssertionError(err)
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully cleaned up!')
+
+
     @torch.inference_mode()
     def _central_evaluate(self):
         mm = MetricManager(self.args.eval_metrics)
@@ -307,6 +324,9 @@ class FedavgServer(BaseServer):
         self._aggregate(selected_ids, updated_sizes) # aggregate local updates
         self.server_optimizer.step() # update global model with theaggregated update
         self.lr_scheduler.step() # update learning rate
+
+        # remove model copy in clients
+        self._cleanup(selected_ids)
         return selected_ids
 
     def evaluate(self, excluded_ids):
@@ -327,6 +347,9 @@ class FedavgServer(BaseServer):
         elif self.args.eval_type == 'both':
             self._request(selected_ids, eval=True, participated=False)
             self._central_evaluate()
+
+        # remove model copy in clients
+        self._cleanup(selected_ids)
 
         # calculate generalization gap
         if (not self.args._train_only) and (not self.args.eval_type == 'global'):

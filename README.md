@@ -1,26 +1,59 @@
-* NOTE: This repository will be updated to *ver 2.0* at least in August, 2022.
-# Federated Averaging (FedAvg) in PyTorch [![arXiv](https://img.shields.io/badge/arXiv-1602.05629-f9f107.svg)](https://arxiv.org/abs/1602.05629)
 
-An unofficial implementation of `FederatedAveraging` (or `FedAvg`) algorithm proposed in the paper [Communication-Efficient Learning of Deep Networks from Decentralized Data](https://arxiv.org/abs/1602.05629) in PyTorch. (implemented in Python 3.9.2.)
+# Federated Learning in PyTorch
+Implementations of various Federated Learning (FL) algorithms in PyTorch, especially for research purpose.
 
-## Implementation points
-* Exactly implement the models ('2NN' and 'CNN' mentioned in the paper) to have the same number of parameters written in the paper.
-  * 2NN: `TwoNN` class in `models.py`; 199,210 parameters
-  * CNN: `CNN` class in `models.py`; 1,663,370 parameters
-* Exactly implement the non-IID data split.
-  * Each client has at least two digits in case of using `MNIST` dataset.
-* Implement multiprocessing of _client update_ and _client evaluation_.
-* Support TensorBoard for log tracking.
+## Implementation Details
+### Dataset
+* __NOTE__: all datasets are automatically downloaded to designated path.
+* Supports all image classification datasets in `torchvision.datasets`.
+* Supports all text classification datasets in `torchtext.datasets`.
+* Supports all datasets in [LEAF benchmark](https://leaf.cmu.edu/) (*NO need of manual preparation of raw data!*)
+* Supports additional image classification datasets ([`TinyImageNet`](https://www.kaggle.com/c/tiny-imagenet), [`CINIC10`](https://datashare.ed.ac.uk/handle/10283/3192)).
+* Supports additional text classification datasets ([`BeerReviews`](https://snap.stanford.edu/data/web-BeerAdvocate.html)).
+* Supports tabular datasets ([`Heart`, `Adult`, `Cover`](https://archive.ics.uci.edu/ml/index.php)).
+* Supports temporal dataset ([`GLEAM`](http://www.skleinberg.org/data.html))
+### Statistical Heterogeneity Simulation
+* `IID` (i.e., statistical homogeneity)
+* `Unbalanced` (i.e., sample counts heterogeneity)
+* `Pathological Non-IID` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
+* `Dirichlet distribution-based Non-IID` ([Hsu et al., 2019](https://arxiv.org/abs/1909.06335))
+* `LEAF benchmark` ([Caldas et al., 2018](https://arxiv.org/abs/1812.01097))
+### Models
+* `LogReg` (logistic regression), `GRUClassifier` (GRU-cell based classifier)
+* [`TwoNN`, `TwoCNN`, `NextCharLSTM`, `NextWordLSTM` ([McMahan et al., 2016])](https://arxiv.org/abs/1602.05629)
+* [`LeNet` (LeCun et al., 1998)](https://ieeexplore.ieee.org/document/726791/), [`MobileNet` (Howard et al., 2019)](https://arxiv.org/abs/1905.02244), [`SqueezeNet` (Iandola et al., 2016)](https://arxiv.org/abs/1602.07360), [`VGG` (Simonyan et al., 2014)](https://arxiv.org/abs/1409.1556), [`ResNet` (He et al., 2015)](https://arxiv.org/abs/1512.03385)
+* [`MobileNeXt` (Daquan et al., 2020)](https://arxiv.org/abs/2007.02269), [`SqueezeNeXt` (Gholami et al., 2016)](https://arxiv.org/abs/1803.10615), [`MobileViT` (Mehta et al., 2021)](https://arxiv.org/abs/2110.02178)
+* [`DistilBERT` (Sanh et al., 2019)](https://arxiv.org/abs/1910.01108), [`SqueezeBERT` (Iandola et al., 2020)](https://arxiv.org/abs/2006.11316), [`MobileBERT` (Sun et al., 2020)](https://arxiv.org/abs/2004.02984)
+### Algorithm
+* `FedAvg` and `FedSGD` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
+* `FedProx` ([Li et al., 2018](https://arxiv.org/abs/1812.06127))
+### Evaluation scheme
+* `local`: evaluate FL algorithm using each client's holdout set.
+* `global`: evaluate FL algorithm using global holdout set located at the server. (*ONLY available if the raw dataset supports pre-defined validation/test set*).
+* `both`: evaluate FL algorithm using both `local` and `global` schemes.
+### Metrics
+* Top-1 Accuracy, Top-5 Accuracy, Precision, Recall, F1
+* Area under ROC, Area under PRC, Youden's J
+* Seq2Seq Accuracy
+* MSE, RMSE, MAE, MAPE
+* $R^2$, $D^2$
 
 ## Requirements
-* See `requirements.txt`
-* When you install `torchtext`, please check compatibility with `torch` (see https://github.com/pytorch/text#installation)
-* Plus, please install `torch`-related packages  via one command; e.g., `conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 torchtext==0.13.0 cudatoolkit=11.6 -c pytorch -c conda-forge`
+* See `requirements.txt`.
+* When you install `torchtext`, please check the version compatibility with `torch`. (See https://github.com/pytorch/text#installation)
+* Plus, please install `torch`-related packages via one command; e.g., `conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 torchtext==0.13.0 cudatoolkit=11.6 -c pytorch -c conda-forge` (See https://pytorch.org/get-started/locally/)
 
 ## Configurations
-* See `python3 main.py -h`
+* See `python3 main.py -h`.
+
+## Example Commands
+* See shell files prepared in `commands` directory.
 
 ## TODO
-- [ ] More experiments with other hyperparameter settings (e.g., different combinations of B, E, K, and C)
-- [ ] Support strucuted datasets suitable for FL from LibSVM, UCI ML repository, KDD cup, etc.
-- [ ] FedSGD support
+- [ ] Support another models, especially lightweight ones for cross-device FL setting. (e.g., [`EdgeNeXt`](https://github.com/mmaaz60/EdgeNeXt))
+- [ ] Support another structured datasets including temporal and tabular data, along with datasets suitable for cross-silo FL setting. (e.g., [`MedMNIST`](https://github.com/MedMNIST/MedMNIST))
+- [ ] Add other popular FL algorithms including personalized FL algorithms (e.g., [`SuPerFed`](https://arxiv.org/abs/2109.07628)).
+- [ ] Attach benchmark results of sample commands.
+
+## Contact
+Should you have any feedback, please create a thread in __issue__ tab, or contact me via `sjhahn11512@gmail.com`. Thank you :)

@@ -28,18 +28,14 @@ def set_logger(path, args):
     logger.setLevel(level=logging.INFO)
     
     # print welcome message
-    logger.info('[WELCOME] Configurations...')
-    for arg in vars(args):
-        logger.info(f'[CONFIG] - {str(arg).upper()}: {getattr(args, arg)}')
-    else:
-        print('')
-        welcome_message = """
-        _______ _______ ______  _______  ______ _______ _______ _______ ______ 
-        |______ |______ |     \ |______ |_____/ |_____|    |    |______ |     \\
-        |       |_______|_____/_|_______|__ _\_ |_ ___|_ __|  _ |______ |_____/
-         |      |______ |_____| |_____/ | \  |   |   | \  | |  ____        
-         |_____ |______ |     | |    \_ |  \_| __|__ |  \_| |_____|        
-                                                                        
-                            By. vaseline555 (Seok-Ju Hahn)
-        """
-        logger.info(welcome_message)
+    logger.info('[WELCOME] Initialize...')
+    welcome_message = """
+    _______ _______ ______  _______  ______ _______ _______ _______ ______ 
+    |______ |______ |     \ |______ |_____/ |_____|    |    |______ |     \\
+    |       |_______|_____/_|_______|__ _\_ |_ ___|_ __|  _ |______ |_____/
+        |      |______ |_____| |_____/ | \  |   |   | \  | |  ____        
+        |_____ |______ |     | |    \_ |  \_| __|__ |  \_| |_____|        
+                                                                    
+                        By. vaseline555 (Seok-Ju Hahn)
+    """
+    logger.info(welcome_message)

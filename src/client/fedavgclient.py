@@ -1,3 +1,4 @@
+import copy
 import torch
 import inspect
 
@@ -32,31 +33,6 @@ class FedavgClient(BaseClient):
         if self.args.B == 0 :
             self.args.B = len(self.training_set)
         return torch.utils.data.DataLoader(dataset=dataset, batch_size=self.args.B, shuffle=shuffle)
-    
-    """def update(self):
-        self.model.train()
-        self.model.to(self.args.device)
-        
-        update_results = dict()
-        optimizer = self.optim(self.model.parameters(), **self._refine_optim_args(self.args))
-        for e in range(self.args.E):
-            losses, corrects = 0., 0.
-            for inputs, targets in self.train_loader:
-                inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
-                outputs = self.model(inputs)
-                loss = self.criterion()(outputs, targets)
-
-                for param in self.model.parameters():
-                    param.grad = None
-                loss.backward()
-                optimizer.step()
-
-                losses += len(outputs) * loss.item()
-                corrects += (outputs.argmax(1) == targets).sum().item()
-            else:
-                epoch_loss, epoch_acc = losses / len(self.training_set), corrects / len(self.training_set)
-                update_results[e + 1] = {'loss': epoch_loss, 'metrics': {'accuracy': epoch_acc}}
-        return update_results"""
 
     def update(self):
         mm = MetricManager(self.args.eval_metrics)
@@ -102,9 +78,10 @@ class FedavgClient(BaseClient):
         return mm.results
 
     def download(self, model):
-        self.model.load_state_dict(model.state_dict())    
+        self.model = copy.deepcopy(model)
 
     def upload(self):
+        self.model.to('cpu')
         return self.model.named_parameters()
     
     def __len__(self):

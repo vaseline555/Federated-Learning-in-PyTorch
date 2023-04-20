@@ -36,10 +36,10 @@ class LEAFDataset(torch.utils.data.Dataset):
         err = '[LEAF] A sub-module should implement this method!'
         logger.exception(err)
         raise NotImplementedError(err)
-
+    
     def __len__(self):
         return self.num_samples
-    
+        
     def __repr__(self):
         return str(self.identifier)
 
@@ -59,6 +59,7 @@ class FEMNIST(LEAFDataset):
         inputs, targets = self.data['x'], self.data['y']
         self.inputs = [raw_path for raw_path in inputs]
         self.targets = torch.tensor(targets).long()
+        self.num_samples = len(self.inputs)
 
     def __getitem__(self, index):
         inputs, targets = self._process(self.inputs[index]), self.targets[index]
@@ -75,11 +76,12 @@ class Shakespeare(LEAFDataset):
 
     def make_dataset(self):
         inputs, targets = self.data['x'], self.data['y']
-        self.inputs = [word_to_indices(word) for word in inputs]
-        self.targets = [letter_to_vec(char) for char in targets]
+        self.inputs = torch.tensor([word_to_indices(word) for word in inputs]).long()
+        self.targets = torch.tensor([letter_to_vec(char) for char in targets]).long()
+        self.num_samples = len(self.inputs)
 
     def __getitem__(self, index):
-        return torch.tensor(self.inputs[index]).long(), torch.tensor(self.targets[index]).long()
+        return self.inputs[index], self.targets[index]
 
 # LEAF - Sent140
 class Sent140(LEAFDataset):
@@ -90,12 +92,11 @@ class Sent140(LEAFDataset):
         self.num_classes = num_classes
         
     def make_dataset(self):
-        self.inputs, self.targets = self.data['x'], self.data['y']
-        
+        self.inputs, self.targets = torch.tensor(self.data['x']).long(), torch.tensor(self.data['y']).long()
+        self.num_samples = len(self.inputs)
+
     def __getitem__(self, index):
-        inputs = self.inputs[index]
-        targets = self.targets[index]
-        return torch.tensor(inputs).long(), torch.tensor(targets).long()
+        return self.inputs[index], self.targets[index]
 
 # LEAF - CelebA
 class CelebA(LEAFDataset):
@@ -114,7 +115,8 @@ class CelebA(LEAFDataset):
         inputs, targets = self.data['x'], self.data['y']
         self.inputs = [fname for fname in inputs]
         self.targets = torch.tensor(targets).long()
-        
+        self.num_samples = len(self.inputs)
+
     def __getitem__(self, index):
         inputs, targets = self._process(self.inputs[index]), self.targets[index]
         if self.transform is not None:
@@ -130,12 +132,11 @@ class Reddit(LEAFDataset):
         self.num_classes = num_classes
 
     def make_dataset(self):
-        self.inputs, self.targets = self.data['x'], self.data['y']
-        
+        self.inputs, self.targets = torch.tensor(self.data['x']).squeeze(), torch.tensor(self.data['y']).squeeze()
+        self.num_samples = len(self.inputs)
+
     def __getitem__(self, index):
-        inputs = self.inputs[index]
-        targets = self.targets[index]
-        return torch.tensor(inputs).squeeze(), torch.tensor(targets).squeeze()
+        return self.inputs[index], self.targets[index]
 
 def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction, transforms):
     CONFIG = {

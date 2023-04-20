@@ -44,6 +44,7 @@ def check_args(args):
     # check algorithm
     if args.algorithm == 'fedsgd':
         args.E = 1
+        args.B = 0
 
     # check lr step
     if args.lr_decay_step >= args.R:
@@ -79,6 +80,13 @@ def check_args(args):
             err = f'selected dataset (`{args.dataset}`) is for a regression task... please check evaluation metrics!'
             logger.exception(err)
             raise AssertionError(err)
+
+    # print welcome message
+    logger.info('[CONFIG] List up configurations...')
+    for arg in vars(args):
+        logger.info(f'[CONFIG] - {str(arg).upper()}: {getattr(args, arg)}')
+    else:
+        print('')
     return args
 
 ########
@@ -110,6 +118,7 @@ class TensorBoardRunner:
         if self.server.is_alive():    
             self.server.terminate()
             self.server.join()
+        self.server.pkill()
         logger.info('[TENSORBOARD] ...finished TensorBoard process!')
         
     def interrupt(self):
@@ -149,8 +158,8 @@ class TensorboardServer(Process):
 ###############
 class TqdmToLogger(tqdm):
     def __init__(self, *args, logger=None, 
-    mininterval=1, 
-    bar_format='{desc:<}{percentage:3.0f}%|{bar:10}|[{n_fmt:4s}/{total_fmt}]', 
+    mininterval=0.1, 
+    bar_format='{desc:<}{percentage:3.0f}% |{bar:20}| [{n_fmt:6s}/{total_fmt}]', 
     desc=None, 
     **kwargs
     ):
@@ -210,6 +219,23 @@ def init_weights(model, init_type, init_gain):
                 torch.nn.init.constant_(m.bias.data, 0.0)
     model.apply(init_func)
 
+#####################
+# BCEWithLogitsLoss #
+#####################
+class NoPainBCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
+    """Native `torch.nn.BCEWithLogitsLoss` requires squeezed logits shape and targets with float dtype.
+    """
+    def __init__(self, **kwargs):
+        super(NoPainBCEWithLogitsLoss, self).__init__(**kwargs)
+
+    def forward(self, inputs, targets):
+        return super(NoPainBCEWithLogitsLoss, self).forward(
+            torch.atleast_1d(inputs.squeeze()), 
+            torch.atleast_1d(targets).float()
+        )
+
+torch.nn.BCEWithLogitsLoss = NoPainBCEWithLogitsLoss
+
 ################
 # Seq2Seq Loss #
 ################
@@ -220,7 +246,7 @@ class Seq2SeqLoss(torch.nn.CrossEntropyLoss):
     def forward(self, inputs, targets, ignore_indices=torch.tensor([0, 1, 2, 3])):
         num_classes = inputs.size(-1)
         inputs, targets = inputs.view(-1, num_classes), targets.view(-1)
-        targets[torch.isin(targets, ignore_indices)] = -1
+        targets[torch.isin(targets, ignore_indices.to(targets.device))] = -1
         return torch.nn.functional.cross_entropy(inputs, targets, ignore_index=-1)
 
 torch.nn.Seq2SeqLoss = Seq2SeqLoss

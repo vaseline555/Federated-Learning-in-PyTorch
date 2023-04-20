@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import warnings
 
 from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve,\
     average_precision_score, f1_score, precision_score, recall_score,\
@@ -7,6 +8,8 @@ from sklearn.metrics import accuracy_score, roc_auc_score, roc_curve,\
             r2_score, d2_pinball_score, top_k_accuracy_score
 
 from .basemetric import BaseMetric
+
+warnings.filterwarnings('ignore')
 
 
 
@@ -47,7 +50,8 @@ class Acc5(BaseMetric):
     def summarize(self):
         scores = torch.cat(self.scores).softmax(-1).numpy()
         answers = torch.cat(self.answers).numpy()
-        return top_k_accuracy_score(answers, scores, k=5)
+        num_classes = scores.shape[-1]
+        return top_k_accuracy_score(answers, scores, k=5, labels=np.arange(num_classes))
 
 class Auroc(BaseMetric):
     def __init__(self):
@@ -62,7 +66,8 @@ class Auroc(BaseMetric):
     def summarize(self):
         scores = torch.cat(self.scores).softmax(-1).numpy()
         answers = torch.cat(self.answers).numpy()
-        return roc_auc_score(answers, scores, average='weighted', multi_class='ovr')
+        num_classes = scores.shape[-1]
+        return roc_auc_score(answers, scores, average='weighted', multi_class='ovr', labels=np.arange(num_classes))
 
 class Auprc(BaseMetric): # only for binary classification
     def __init__(self):

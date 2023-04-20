@@ -210,7 +210,7 @@ def load_dataset(args):
     # adjust the number of classes in binary case
     if args.num_classes == 2:
         args.num_classes = 1
-        args.criterion = torch.nn.BCEWithLogitsLoss
+        args.criterion = 'BCEWithLogitsLoss'
         
     # check if global holdout set is required or not
     if args.eval_type == 'local':
