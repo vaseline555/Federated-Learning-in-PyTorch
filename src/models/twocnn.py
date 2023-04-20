@@ -21,9 +21,9 @@ class TwoCNN(torch.nn.Module): # McMahan et al., 2016; 1,663,370 parameters
         self.classifier = torch.nn.Sequential(
             torch.nn.AdaptiveAvgPool2d((7, 7)),
             torch.nn.Flatten(),
-            torch.nn.Linear(in_features=(self.hidden_channels * 2) * (7 * 7), out_features=self.hidden_channels, bias=True),
+            torch.nn.Linear(in_features=(self.hidden_channels * 2) * (7 * 7), out_features=512, bias=True),
             torch.nn.ReLU(True),
-            torch.nn.Linear(in_features=self.hidden_channels, out_features=self.num_classes, bias=True)
+            torch.nn.Linear(in_features=512, out_features=self.num_classes, bias=True)
         )
 
     def forward(self, x):

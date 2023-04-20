@@ -17,7 +17,7 @@ class NextCharLSTM(torch.nn.Module):
         self.features = torch.nn.Sequential(
             torch.nn.Embedding(num_embeddings=self.num_embeddings, embedding_dim=self.embedding_size),
             torch.nn.LSTM(
-                input_size=self.embedding_dim,
+                input_size=self.embedding_size,
                 hidden_size=self.num_hiddens,
                 num_layers=self.num_layers,
                 batch_first=True,

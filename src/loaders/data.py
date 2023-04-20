@@ -74,6 +74,7 @@ def load_dataset(args):
                 torchvision.transforms.RandomRotation(args.randrot) if (args.randrot is not None and train) else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.RandomHorizontalFlip(args.randhf) if (args.randhf is not None and train) else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.RandomVerticalFlip(args.randvf) if (args.randvf is not None and train) else torchvision.transforms.Lambda(lambda x: x),
+                torchvision.transforms.ColorJitter(brightness=args.randjit, contrast=args.randjit, saturation=args.randjit, hue=args.randjit) if (args.randjit is not None and train) else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) if args.imnorm else torchvision.transforms.Lambda(lambda x: x)
             ]
@@ -140,7 +141,6 @@ def load_dataset(args):
             seed=args.seed, 
             raw_data_fraction=args.rawsmpl, 
             test_fraction=args.test_fraction, 
-            n_jobs=os.cpu_count() - 1, 
             transforms=transforms
         )
 

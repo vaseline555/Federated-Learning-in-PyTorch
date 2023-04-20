@@ -2,14 +2,11 @@ import torch
 import inspect
 
 from .baseclient import BaseClient
-
+from src import MetricManager
 
 
 class FedavgClient(BaseClient):
-    """Class for client object having its own (private) data and resources to train a model.
-    """
     def __init__(self, args, training_set, test_set):
-        """Client object is initiated by the center server."""
         super(FedavgClient, self).__init__()
         self.args = args
         self.training_set = training_set
@@ -36,7 +33,7 @@ class FedavgClient(BaseClient):
             self.args.B = len(self.training_set)
         return torch.utils.data.DataLoader(dataset=dataset, batch_size=self.args.B, shuffle=shuffle)
     
-    def update(self):
+    """def update(self):
         self.model.train()
         self.model.to(self.args.device)
         
@@ -59,31 +56,56 @@ class FedavgClient(BaseClient):
             else:
                 epoch_loss, epoch_acc = losses / len(self.training_set), corrects / len(self.training_set)
                 update_results[e + 1] = {'loss': epoch_loss, 'metrics': {'accuracy': epoch_acc}}
-        return update_results
+        return update_results"""
+
+    def update(self):
+        mm = MetricManager(self.args.eval_metrics)
+        self.model.train()
+        self.model.to(self.args.device)
+        
+        optimizer = self.optim(self.model.parameters(), **self._refine_optim_args(self.args))
+        for e in range(self.args.E):
+            for inputs, targets in self.train_loader:
+                inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
+
+                outputs = self.model(inputs)
+                loss = self.criterion()(outputs, targets)
+
+                for param in self.model.parameters():
+                    param.grad = None
+                loss.backward()
+                optimizer.step()
+
+                mm.track(loss.item(), outputs, targets)
+            else:
+                mm.aggregate(len(self.training_set), e + 1)
+        return mm.results
 
     @torch.inference_mode()
     def evaluate(self):
+        if self.args._train_only: # `args.test_fraction` == 0
+            return {'loss': -1, 'metrics': {'none': -1}}
+
+        mm = MetricManager(self.args.eval_metrics)
         self.model.eval()
         self.model.to(self.args.device)
 
-        losses, corrects = 0., 0.
         for inputs, targets in self.test_loader:
             inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
+
             outputs = self.model(inputs)
             loss = self.criterion()(outputs, targets)
 
-            losses += len(outputs) * loss.item()
-            corrects += (outputs.argmax(1) == targets).sum().item()
+            mm.track(loss.item(), outputs, targets)
         else:
-            total_loss, total_acc = losses / len(self.test_set), corrects / len(self.test_set)
-            eval_results = {'loss': total_loss, 'metrics': {'accuracy': total_acc}}
-        return eval_results
+            mm.aggregate(len(self.test_set))
+        return mm.results
 
     def download(self, model):
         self.model.load_state_dict(model.state_dict())    
 
     def upload(self):
-        return self.model.parameters()
+        return self.model.named_parameters()
     
     def __len__(self):
         return len(self.training_set), len(self.test_set)

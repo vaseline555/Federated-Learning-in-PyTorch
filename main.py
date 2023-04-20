@@ -31,6 +31,9 @@ def main(args, writer):
     # get model
     model, args = load_model(args)
 
+    # check all args before FL
+    args = check_args(args)
+
     # create central server
     server_class = import_module(f'src.server.{args.algorithm}server').__dict__[f'{args.algorithm.title()}Server']
     server = server_class(args=args, writer=writer, server_dataset=server_dataset, client_datasets=client_datasets, model=model)
@@ -81,7 +84,7 @@ if __name__ == "__main__":
     - LEAF benchmarks [ FEMNIST | Sent140 | Shakespeare | CelebA | Reddit ],
     - among [ TinyImageNet | CINIC10 | BeerReviewsA | BeerReviewsL | Heart | Adult | Cover | GLEAM ]
     ''', type=str, required=True)
-    parser.add_argument('--test_fraction', help='fraction of hold-out dataset for evaluation', type=float, choices=[Range(0., 1.)], default=0.2)
+    parser.add_argument('--test_fraction', help='fraction of hold-out dataset for evaluation', type=float, choices=[Range(0., 9e-1)], default=0.2)
 
     ## data augmentation arguments
     parser.add_argument('--resize', help='resize input images (using `torchvision.transforms.Resize`)', type=int, default=28)
@@ -89,7 +92,8 @@ if __name__ == "__main__":
     parser.add_argument('--randrot', help='randomly rotate input (using `torchvision.transforms.RandomRotation`)', type=int, default=None)
     parser.add_argument('--randhf', help='randomly flip input horizontaly (using `torchvision.transforms.RandomHorizontalFlip`)', type=float, choices=[Range(0., 1.)], default=None)
     parser.add_argument('--randvf', help='randomly flip input vertically (using `torchvision.transforms.RandomVerticalFlip`)', type=float, choices=[Range(0., 1.)], default=None)
-    
+    parser.add_argument('--randjit', help='randomly flip input vertically (using `torchvision.transforms.RandomVerticalFlip`)', type=float, default=None)
+
     ## statistical heterogeneity simulation arguments
     parser.add_argument('--split_type', help='''type of data split scenario
     - `iid`: statistically homogeneous setting,
@@ -146,14 +150,20 @@ if __name__ == "__main__":
         choices=['local', 'global', 'both'],
         required=True
     )
-    parser.add_argument('--eval_fraction', help='fraction of randomly selected clients for evaluation (for `eval_type` is `local` or `both`)', type=float, choices=[Range(1e-8, 1.)], default=1.)
+    parser.add_argument('--eval_fraction', help='fraction of randomly selected (unparticipated) clients for the evaluation (for `eval_type` is `local` or `both`)', type=float, choices=[Range(1e-8, 1.)], default=1.)
     parser.add_argument('--eval_every', help='frequency of the evaluation (i.e., evaluate peformance of a model every `eval_every` round)', type=int, default=1)
-    parser.add_argument('--C', help='sampling fraction of clietns per round (full participation when zero is passed)', type=float, choices=[Range(1e-8, 1.)], default=0.1)
+    parser.add_argument('--eval_metrics', help='metric(s) used for evaluation', type=str,
+        choices=[
+            'acc1', 'acc5', 'auroc', 'auprc', 'youdenj', 'f1', 'precision', 'recall',
+            'seqacc', 'mse', 'mae', 'mape', 'rmse', 'r2', 'd2'
+        ], nargs='+', required=True
+    )
     parser.add_argument('--K', help='number of total cilents participating in federated training', type=int, default=100)
-    parser.add_argument('--R', help='number of total rounds', type=int, default=5000)
+    parser.add_argument('--R', help='number of total rounds', type=int, default=1000)
+    parser.add_argument('--C', help='sampling fraction of clietns per round (full participation when zero is passed)', type=float, choices=[Range(0., 1.)], default=0.1)
     parser.add_argument('--E', help='number of local epochs', type=int, default=5)
     parser.add_argument('--B', help='batch size for local update in each client (full-batch training when zero is passed)', type=int, default=10)
-    parser.add_argument('--beta', help='global momentum factor for an update of a global model when aggregated at the server', type=float, choices=[Range(0., 1.)], default=0.)
+    parser.add_argument('--beta', help='global momentum factor for an update of a global model when aggregated at the server', type=float, choices=[Range(0., 1.)], default=0.99)
     
     # optimization arguments
     parser.add_argument('--no_shuffle', help='do not shuffle data (if passed)', action='store_true')
@@ -161,16 +171,14 @@ if __name__ == "__main__":
     parser.add_argument('--weight_decay', help='weight decay (L2 penalty)', type=float, choices=[Range(0., 1.)], default=0)
     parser.add_argument('--momentum', help='momentum factor', type=float, choices=[Range(0., 1.)], default=0.)
     parser.add_argument('--lr', help='learning rate for local updates in each client', type=float, choices=[Range(0., 100.)], default=0.01)
-    parser.add_argument('--lr_decay', help='rate of learning rate decay applied per round', type=float, choices=[Range(0., 1.)], default=0.9999)
+    parser.add_argument('--lr_decay', help='rate of learning rate decay applied per round', type=float, choices=[Range(0., 1.)], default=0.95)
+    parser.add_argument('--lr_decay_step', help='rate of learning rate decay applied per round', type=int, default=20)
     parser.add_argument('--criterion', help='type of criterion for objective function (should be a submodule of `torch.nn`)', type=str, default='CrossEntropyLoss')
     parser.add_argument('--mu', help='constant for proximity regularization term (for algorithms `fedprox`)', type=float, choices=[Range(0., 100)], default=0.01)
 
     # parse arguments
     args = parser.parse_args()
     
-    # check arguments
-    args = check_args(args)
-
     # make path for saving losses & metrics & models
     curr_time = time.strftime("%y%m%d_%H%M%S", time.localtime())
     args.exp_name = f'{args.exp_name}_{args.seed}_{args.dataset.lower()}_{args.model_name.lower()}'
@@ -185,17 +193,22 @@ if __name__ == "__main__":
     # initialize logger
     set_logger(f'{args.log_path}/{args.exp_name}_{curr_time}.log', args)
     
-    # run main program
-    if args.use_tb: # run TensorBaord for tracking losses and metrics
-        writer = SummaryWriter(
+    # check TensorBoard execution
+    if args.use_tb: # run TensorBaord for tracking losses and metrics   
+        tb = TensorBoardRunner(os.path.join(args.log_path, f'{args.exp_name}_{curr_time}'), args.tb_host, args.tb_port)
+    else:
+        tb = None
+
+    # define writer
+    writer = SummaryWriter(
             log_dir=os.path.join(args.log_path, f'{args.exp_name}_{curr_time}'), 
             filename_suffix=f'_{curr_time}'
-        )
-        tb = TensorBoardRunner(os.path.join(args.log_path, f'{args.exp_name}_{curr_time}'), args.tb_host, args.tb_port)
-        main(args, writer)
-        tb.finalize()
-    else:
-        main(args, None)
+    )
+
+    # run main program
+    main(args, writer)
     
     # bye!
+    if tb is not None:
+        tb.finalize()
     os._exit(0)

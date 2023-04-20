@@ -10,7 +10,7 @@ import concurrent.futures
 from importlib import import_module
 from collections import ChainMap, defaultdict
 
-from src import init_weights, TqdmToLogger
+from src import init_weights, TqdmToLogger, MetricManager
 from .baseserver import BaseServer
 
 logger = logging.getLogger(__name__)
@@ -18,8 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class FedavgServer(BaseServer):
-    """Centeral server orchestrating the whole process of federated learning.
-    """
     def __init__(self, args, writer, server_dataset, client_datasets, model):
         self.args = args
         self.writer = writer
@@ -38,7 +36,7 @@ class FedavgServer(BaseServer):
         self.server_optimizer = self._get_algorithm(self.model, lr=self.args.lr, momentum=self.args.beta)
 
         # lr scheduler
-        self.lr_scheduler = torch.optim.lr_scheduler.MultiplicativeLR(self.server_optimizer, lr_lambda=lambda curr_round: self.args.lr_decay**curr_round)
+        self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.server_optimizer, factor=self.args.lr_decay, total_iters=self.args.lr_decay_step)
 
         # clients
         self.clients = self._create_clients(client_datasets)
@@ -49,7 +47,7 @@ class FedavgServer(BaseServer):
     def _init_model(self, model):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Initialize a model!')
         init_weights(model, self.args.init_type, self.args.init_gain)
-        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...sucessfully initialized the model ({self.args.model_name}; init type: {self.args.init_type.upper()})!')
+        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...sucessfully initialized the model ({self.args.model_name}; (Initialization type: {self.args.init_type.upper()}))!')
         return model
     
     def _get_algorithm(self, model, **kwargs):
@@ -98,12 +96,15 @@ class FedavgServer(BaseServer):
 
     def _sample_clients(self, exclude=[]):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Sample clients!')
-        if exclude == []: # randomly select floor(C * K) clients
+        
+        # Update - randomly select max(floor(C * K), 1) clients
+        if exclude == []: 
             num_sampled_clients = max(int(self.args.C * self.args.K), 1)
             sampled_client_ids = sorted(random.sample(self.clients.keys(), num_sampled_clients))
-        else: # randomly select unparticipated clients in amount of `eval_fraction` multiplied
-            num_unparticipated_clients = max(int((1. - self.args.C) * self.args.K), 0)
-            if num_unparticipated_clients == 0: # when C = 1; evaluate on all clients!
+        # Evaluation - randomly select unparticipated clients in amount of `eval_fraction` multiplied
+        else: 
+            num_unparticipated_clients = self.args.K - len(exclude)
+            if num_unparticipated_clients == 0: # when C = 1, i.e., need to evaluate on all clients
                 num_sampled_clients = self.args.K
                 sampled_client_ids = sorted(self.clients.keys())
             else:
@@ -158,12 +159,11 @@ class FedavgServer(BaseServer):
         top = losses.max()
         total_log_string += f'\n    - Loss: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Top ({top:.4f})'
         result_dict['loss'] = {'weighted': weighted, 'equal': equal, 'std': std, 'top': top}
-        if self.writer is not None:
-            self.writer.add_scalars(
-                f'Local {"Test" if eval else "Training"} Loss ' + eval * f'({"In" if participated else "Out"})',
-                {f'Weighted Average': weighted, f'Equal Average': equal, f'Top': top},
-                self.round
-            )
+        self.writer.add_scalars(
+            f'Local {"Test" if eval else "Training"} Loss ' + eval * f'({"In" if participated else "Out"})',
+            {f'Weighted Average': weighted, f'Equal Average': equal, f'Top': top},
+            self.round
+        )
 
         # metrics
         for name, val in metrics.items():
@@ -174,14 +174,13 @@ class FedavgServer(BaseServer):
             bottom = val.min()
             total_log_string += f'\n    - {name.title()}: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Bottom ({bottom:.4f})'
             result_dict[name] = {'weighted': weighted, 'equal': equal, 'std': std, 'bottom': bottom}
-            if self.writer is not None:
-                for name in metrics.keys():
-                    self.writer.add_scalars(
-                        f'Local {"Test" if eval else "Training"} {name.title()}' + eval * f'({"In" if participated else "Out"})',
-                        {f'Weighted Average': weighted, f'Equal Average': equal, f'Bottom': bottom},
-                        self.round
-                    )
-                self.writer.flush()
+            for name in metrics.keys():
+                self.writer.add_scalars(
+                    f'Local {"Test" if eval else "Training"} {name.title()}' + eval * f'({"In" if participated else "Out"})',
+                    {f'Weighted Average': weighted, f'Equal Average': equal, f'Bottom': bottom},
+                    self.round
+                )
+            self.writer.flush()
         
         # log total message
         logger.info(total_log_string)
@@ -199,6 +198,7 @@ class FedavgServer(BaseServer):
 
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Request {"updates" if not eval else "evaluation"} to {"all" if ids is None else len(ids)} clients!')
         if eval:
+            if self.args._train_only: return
             results = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
                 for idx in TqdmToLogger(
@@ -241,9 +241,6 @@ class FedavgServer(BaseServer):
     def _aggregate(self, ids, updated_sizes):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Aggregate updated signals!')
 
-        # empty out buffer
-        self.server_optimizer.zero_grad()
-
         # calculate mixing coefficients according to sample sizes
         coefficients = {identifier: coefficient / sum(updated_sizes.values()) for identifier, coefficient in updated_sizes.items()}
         
@@ -251,48 +248,44 @@ class FedavgServer(BaseServer):
         for identifier in ids:
             locally_updated_weights_iterator = self.clients[identifier].upload()
             self.server_optimizer.accumulate(coefficients[identifier], locally_updated_weights_iterator)
-        else:
-            self.server_optimizer.step()
-            self.lr_scheduler.step()
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully aggregated into a new gloal model!')
 
     @torch.inference_mode()
     def _central_evaluate(self):
+        mm = MetricManager(self.args.eval_metrics)
         self.model.eval()
         self.model.to(self.args.device)
 
-        losses, corrects = 0., 0.
         for inputs, targets in torch.utils.data.DataLoader(dataset=self.server_dataset, batch_size=self.args.B, shuffle=False):
             inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
+
             outputs = self.model(inputs)
             loss = torch.nn.__dict__[self.args.criterion]()(outputs, targets)
 
-            losses += len(outputs) * loss.item()
-            corrects += (outputs.argmax(1) == targets).sum().item()
+            mm.track(loss.item(), outputs, targets)
         else:
-            epoch_loss, epoch_acc = losses / len(self.server_dataset), corrects / len(self.server_dataset)
-            result = {'loss': epoch_loss, 'metrics': {'accuracy': epoch_acc}}
+            mm.aggregate(len(self.server_dataset))
 
-            # log result
-            server_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [EVALUATE] [SERVER] '
+        # log result
+        result = mm.results
+        server_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [EVALUATE] [SERVER] '
 
-            ## loss
-            loss = result['loss']
-            server_log_string += f'| loss: {loss:.4f} '
-            
-            ## metrics
-            for metric, value in result['metrics'].items():
-                server_log_string += f'| {metric}: {value:.4f} '
-            logger.info(server_log_string)
+        ## loss
+        loss = result['loss']
+        server_log_string += f'| loss: {loss:.4f} '
+        
+        ## metrics
+        for metric, value in result['metrics'].items():
+            server_log_string += f'| {metric}: {value:.4f} '
+        logger.info(server_log_string)
 
-            # log TensorBoard
-            if self.writer is not None:
-                self.writer.add_scalar('Server Loss', epoch_loss, self.round)
-                for name, value in result['metrics'].items():
-                    self.writer.add_scalar(f'Server {name.title()}', value, self.round)
-                else:
-                    self.writer.flush()
-            self.results[self.round]['server_evaluated'] = result
+        # log TensorBoard
+        self.writer.add_scalar('Server Loss', loss, self.round)
+        for name, value in result['metrics'].items():
+            self.writer.add_scalar(f'Server {name.title()}', value, self.round)
+        else:
+            self.writer.flush()
+        self.results[self.round]['server_evaluated'] = result
 
     def update(self):
         """Update the global model through federated learning.
@@ -309,8 +302,11 @@ class FedavgServer(BaseServer):
         # request evaluation to selected clients
         self._request(selected_ids, eval=True, participated=True)
 
-        # receive updates and aggregate into a new server model 
-        self._aggregate(selected_ids, updated_sizes)
+        # receive updates and aggregate into a new weights
+        self.server_optimizer.zero_grad() # empty out buffer
+        self._aggregate(selected_ids, updated_sizes) # aggregate local updates
+        self.server_optimizer.step() # update global model with theaggregated update
+        self.lr_scheduler.step() # update learning rate
         return selected_ids
 
     def evaluate(self, excluded_ids):
@@ -333,18 +329,18 @@ class FedavgServer(BaseServer):
             self._central_evaluate()
 
         # calculate generalization gap
-        gen_gap = dict()
-        curr_res = self.results[self.round]
-        for key in curr_res['clients_evaluated_out'].keys():
-            for name in curr_res['clients_evaluated_out'][key].keys():
-                if name in ['equal', 'weighted']:
-                    gap = curr_res['clients_evaluated_out'][key][name] - curr_res['clients_evaluated_in'][key][name]
-                    gen_gap[f'gen_gap_{key}'] = {name: gap}
-                    if self.writer is not None:
+        if (not self.args._train_only) and (not self.args.eval_type == 'global'):
+            gen_gap = dict()
+            curr_res = self.results[self.round]
+            for key in curr_res['clients_evaluated_out'].keys():
+                for name in curr_res['clients_evaluated_out'][key].keys():
+                    if name in ['equal', 'weighted']:
+                        gap = curr_res['clients_evaluated_out'][key][name] - curr_res['clients_evaluated_in'][key][name]
+                        gen_gap[f'gen_gap_{key}'] = {name: gap}
                         self.writer.add_scalars(f'Generalization Gap ({key.title()})', gen_gap[f'gen_gap_{key}'], self.round)
                         self.writer.flush()
-        else:
-            self.results[self.round]['generalization_gap'] = dict(gen_gap)
+            else:
+                self.results[self.round]['generalization_gap'] = dict(gen_gap)
 
     def finalize(self):
         """Save results.
@@ -358,7 +354,6 @@ class FedavgServer(BaseServer):
         # save checkpoint
         torch.save(self.model.state_dict(), os.path.join(self.args.result_path, f'{self.args.exp_name}.pt'))
         
-        if self.writer is not None:
-            self.writer.close()
+        self.writer.close()
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...finished federated learning!')
         

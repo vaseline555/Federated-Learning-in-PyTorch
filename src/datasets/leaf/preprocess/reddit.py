@@ -46,17 +46,22 @@ def preprocess(root):
         pad_symbol, unk_symbol, bos_symbol, eos_symbol = 0, 1, 2, 3
         count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))
         count_pairs = count_pairs[:(vocab_size - 4)] # 4 to account for special symbols
-
+        
         words, _ = list(zip(*count_pairs))
+        words = list(words)
         vocab = {}
         vocab['<PAD>'] = pad_symbol
         vocab['<UNK>'] = unk_symbol
         vocab['<BOS>'] = bos_symbol
         vocab['<EOS>'] = eos_symbol
 
-        for i, w in enumerate(words):
-            if w != '<PAD>':
-                vocab[w] = i + 1
+        idx = 4 # due to special tokens
+        while len(words) > 0:
+            w = words.pop()
+            if w in ['<PAD>', '<UNK>', '<BOS>', '<EOS>']:
+                continue
+            vocab[w] = idx
+            idx += 1
         vocab = {'vocab': vocab, 'size': vocab_size, 'unk_symbol': unk_symbol, 'pad_symbol': pad_symbol, 'bos_symbol': bos_symbol, 'eos_symbol': eos_symbol}
         return vocab
     

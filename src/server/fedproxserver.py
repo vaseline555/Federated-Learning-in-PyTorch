@@ -7,6 +7,6 @@ logger = logging.getLogger(__name__)
 
 
 
-class FedsgdServer(FedavgServer):
+class FedproxServer(FedavgServer):
     def __init__(self, **kwargs):
-        super(FedsgdServer, self).__init__(**kwargs)
+        super(FedproxServer, self).__init__(**kwargs)

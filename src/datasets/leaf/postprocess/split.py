@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 
 
-def split_datasets(dataset_name, root, seed, test_data_fraction):
+def split_datasets(dataset_name, root, seed, test_fraction):
     # set path
     data_dir = os.path.join(root, dataset_name)
     subdir = os.path.join(data_dir, 'rem_clients_data')
@@ -33,7 +33,6 @@ def split_datasets(dataset_name, root, seed, test_data_fraction):
     file_dir = os.path.join(subdir, files[0])
     with open(file_dir, 'r') as file:
         data = json.load(file)
-    include_hierarchy = 'hierarchies' in data
     
     # split training/test data inside clients
     for f in files:
@@ -45,12 +44,11 @@ def split_datasets(dataset_name, root, seed, test_data_fraction):
         user_data_train, user_data_test = {}, {}
         user_indices = [] # indices of users in `data['users']` that are not deleted
 
-        removed = 0
         for i, u in enumerate(data['users']):
             curr_num_samples = len(data['user_data'][u]['y'])
             if curr_num_samples >= 2:
                 # ensures number of train and test samples both >= 1
-                num_train_samples = max(1, int((1. - test_data_fraction) * curr_num_samples))
+                num_train_samples = max(1, int((1. - test_fraction) * curr_num_samples))
                 if curr_num_samples == 2:
                     num_train_samples = 1
                 num_test_samples = curr_num_samples - num_train_samples
@@ -92,7 +90,7 @@ def split_datasets(dataset_name, root, seed, test_data_fraction):
         all_data_train['user_data'] = user_data_train
     
         # save file of training set
-        with open(os.path.join(data_dir, 'train', f'{f[:-5]}_train_0{str(1. - test_data_fraction)[2:]}.json'), 'w') as outfile:
+        with open(os.path.join(data_dir, 'train', f'{f[:-5]}_train_0{str(1. - test_fraction)[2:]}.json'), 'w') as outfile:
             json.dump(all_data_train, outfile)
         
         # create json file of test set
@@ -102,5 +100,5 @@ def split_datasets(dataset_name, root, seed, test_data_fraction):
         all_data_test['user_data'] = user_data_test
         
         # save file of test set
-        with open(os.path.join(data_dir, 'test', f'{f[:-5]}_test_0{str(test_data_fraction)[2:]}.json'), 'w') as outfile:
+        with open(os.path.join(data_dir, 'test', f'{f[:-5]}_test_0{str(test_fraction)[2:]}.json'), 'w') as outfile:
             json.dump(all_data_test, outfile)

@@ -17,25 +17,24 @@ class FedavgOptimizer(BaseOptimizer, torch.optim.Optimizer):
             loss = closure()
 
         for group in self.param_groups:
-            momentum = group['momentum']
+            beta = group['momentum']
             for param in group['params']:
                 if param.grad is None:
                     continue
                 delta = param.grad.data
-                if momentum > 0.:
+                if beta > 0.:
                     if 'momentum_buffer' not in self.state[param]:
-                        buffer = self.state[param]['momentum_buffer'] = torch.zeros_like(p).detach()
-                    else:
-                        buffer = self.state[param]['momentum_buffer']
-                        buffer.mul_(momentum).add_(delta) # \delta w + \beta v
-                    delta = buffer
-                # apply update
+                        self.state[param]['momentum_buffer'] = torch.zeros_like(param).detach()
+                    self.state[param]['momentum_buffer'].mul_(beta).add_(delta.mul(1. - beta)) # \beta * v + (1 - \beta) * grad
+                    delta = self.state[param]['momentum_buffer']
                 param.data.sub_(delta)
         return loss
 
-    def accumulate(self, mixing_coefficient, local_param_iterator):
+    def accumulate(self, mixing_coefficient, local_param_iterator, partial_agg_condition=lambda name: None):
         for group in self.param_groups:
-            for server_param, local_param in zip(group['params'], local_param_iterator):
+            for server_param, (name, local_param) in zip(group['params'], local_param_iterator):
+                if partial_agg_condition(name):
+                    continue
                 if server_param.grad is None:
                     server_param.grad = server_param.data.sub(local_param.data).mul(mixing_coefficient)
                 else:
