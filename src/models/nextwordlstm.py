@@ -5,13 +5,13 @@ from src.models.model_utils import Lambda
 
 
 class NextWordLSTM(torch.nn.Module):
-    def __init__(self, embedding_size, num_embeddings, hidden_size, dropout):
+    def __init__(self, embedding_size, num_embeddings, hidden_size, dropout, num_layers):
         super(NextWordLSTM, self).__init__()
         self.num_hiddens = hidden_size
         self.num_embeddings = num_embeddings
         self.embedding_size = embedding_size
         self.dropout = dropout
-        self.num_layers = 2
+        self.num_layers = num_layers
 
         self.features = torch.nn.Sequential(
             torch.nn.Embedding(num_embeddings=self.num_embeddings, embedding_dim=self.embedding_size),

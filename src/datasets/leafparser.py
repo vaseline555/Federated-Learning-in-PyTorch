@@ -5,15 +5,13 @@ import json
 import torch
 import logging
 import importlib
+import concurrent.futures
 
-import numpy as np
-
-from tqdm import tqdm
 from abc import abstractmethod
-from multiprocessing import pool
+from collections import ChainMap
 
+from src import TqdmToLogger
 from src.datasets.leaf import *
-from src.utils import TqdmToLogger
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +36,20 @@ class LEAFDataset(torch.utils.data.Dataset):
         err = '[LEAF] A sub-module should implement this method!'
         logger.exception(err)
         raise NotImplementedError(err)
-
+    
     def __len__(self):
         return self.num_samples
-    
+        
     def __repr__(self):
         return str(self.identifier)
 
 # LEAF - FEMNIST
 class FEMNIST(LEAFDataset):
-    def __init__(self, in_channels, transform=None):
+    def __init__(self, in_channels, num_classes, transform=None):
         super(FEMNIST, self).__init__()
         self.in_channels = in_channels
         self.transform = transform
+        self.num_classes = num_classes
         
     def _process(self, raw_path):
         inputs = PIL.Image.open(raw_path).convert('L')
@@ -60,6 +59,7 @@ class FEMNIST(LEAFDataset):
         inputs, targets = self.data['x'], self.data['y']
         self.inputs = [raw_path for raw_path in inputs]
         self.targets = torch.tensor(targets).long()
+        self.num_samples = len(self.inputs)
 
     def __getitem__(self, index):
         inputs, targets = self._process(self.inputs[index]), self.targets[index]
@@ -69,40 +69,42 @@ class FEMNIST(LEAFDataset):
     
 # LEAF - Shakespeare
 class Shakespeare(LEAFDataset):
-    def __init__(self, num_embeddings, seq_len):
+    def __init__(self, num_embeddings, num_classes):
         super(Shakespeare, self).__init__()
         self.num_embeddings = num_embeddings
-        self.seq_len = seq_len
-        
+        self.num_classes =  num_classes
+
     def make_dataset(self):
         inputs, targets = self.data['x'], self.data['y']
-        self.inputs = [word_to_indices(word) for word in inputs]
-        self.targets = [letter_to_vec(char) for char in targets]
+        self.inputs = torch.tensor([word_to_indices(word) for word in inputs]).long()
+        self.targets = torch.tensor([letter_to_vec(char) for char in targets]).long()
+        self.num_samples = len(self.inputs)
 
     def __getitem__(self, index):
-        return torch.tensor(self.inputs[index]).long(), torch.tensor(self.targets[index]).long()
+        return self.inputs[index], self.targets[index]
 
 # LEAF - Sent140
 class Sent140(LEAFDataset):
-    def __init__(self, num_embeddings, seq_len):
+    def __init__(self, num_embeddings, seq_len, num_classes):
         super(Sent140, self).__init__()
         self.num_embeddings = num_embeddings
         self.seq_len = seq_len
+        self.num_classes = num_classes
         
     def make_dataset(self):
-        self.inputs, self.targets = self.data['x'], self.data['y']
-        
+        self.inputs, self.targets = torch.tensor(self.data['x']).long(), torch.tensor(self.data['y']).long()
+        self.num_samples = len(self.inputs)
+
     def __getitem__(self, index):
-        inputs = self.inputs[index]
-        targets = self.targets[index]
-        return torch.tensor(inputs).long(), torch.tensor(targets).long()
+        return self.inputs[index], self.targets[index]
 
 # LEAF - CelebA
 class CelebA(LEAFDataset):
-    def __init__(self, in_channels, img_path, transform=None):
+    def __init__(self, in_channels, img_path, num_classes, transform=None):
         super(CelebA, self).__init__()
         self.in_channels = in_channels
         self.img_path = img_path
+        self.num_classes = num_classes
         self.transform = transform
         
     def _process(self, path):
@@ -113,7 +115,8 @@ class CelebA(LEAFDataset):
         inputs, targets = self.data['x'], self.data['y']
         self.inputs = [fname for fname in inputs]
         self.targets = torch.tensor(targets).long()
-        
+        self.num_samples = len(self.inputs)
+
     def __getitem__(self, index):
         inputs, targets = self._process(self.inputs[index]), self.targets[index]
         if self.transform is not None:
@@ -122,27 +125,26 @@ class CelebA(LEAFDataset):
 
 # LEAF - Reddit
 class Reddit(LEAFDataset):
-    def __init__(self, num_embeddings, seq_len):
+    def __init__(self, num_embeddings, seq_len, num_classes):
         super(Reddit, self).__init__()
         self.num_embeddings = num_embeddings
         self.seq_len = seq_len
+        self.num_classes = num_classes
 
     def make_dataset(self):
-        self.inputs, self.targets = self.data['x'], self.data['y']
-        
-    def __getitem__(self, index):
-        inputs = self.inputs[index]
-        targets = self.targets[index]
-        return torch.tensor(inputs).squeeze(), torch.tensor(targets).squeeze()
+        self.inputs, self.targets = torch.tensor(self.data['x']).squeeze(), torch.tensor(self.data['y']).squeeze()
+        self.num_samples = len(self.inputs)
 
-def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction, n_jobs, transforms):
-    NUM_CLASSES = {'femnist': 62, 'shakespeare': 80, 'sent140': 2, 'celeba': 2, 'reddit': 10000}
+    def __getitem__(self, index):
+        return self.inputs[index], self.targets[index]
+
+def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction, transforms):
     CONFIG = {
-        'femnist': {'in_channels': 1},
-        'shakespeare': {'num_embeddings': 80, 'seq_len': 80},
-        'sent140': {'num_embeddings': 400000 + 1, 'seq_len': 25}, # using GloVe 300-dim embeddings; 400000 + 1 for an unknown token
-        'celeba': {'in_channels': 3, 'img_path': f'{root}/celeba/raw/img_align_celeba'},
-        'reddit': {'num_embeddings': 10001, 'seq_len': 10} # + 1 for an unknown token
+        'femnist': {'in_channels': 1, 'num_classes': 62},
+        'shakespeare': {'num_embeddings': 80, 'num_classes': 80},
+        'sent140': {'num_embeddings': 400000 + 1, 'seq_len': 25, 'num_classes': 2}, # using GloVe 300-dim embeddings; 400000 + 1 for an unknown token
+        'celeba': {'in_channels': 3, 'img_path': f'{root}/celeba/raw/img_align_celeba', 'num_classes': 2},
+        'reddit': {'num_embeddings': 10000, 'seq_len': 10, 'num_classes': 10000} # + 1 for an unknown token
     }
         
     def _load_processed(path, mode):
@@ -171,15 +173,21 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
             # transplant transform method
             tr_dset.transform = transforms[0]
             te_dset.transform = transforms[1]
-            return (tr_dset, te_dset)
+            return {user: (tr_dset, te_dset)}
         
-        with pool.ThreadPool(processes=n_jobs) as workhorse:
-            datasets = workhorse.starmap(_construct_dataset, [(idx, user) for idx, user in tqdm(enumerate(raw_train['users']), desc=f'[LOAD] [LEAF - {dataset_name.upper()}] ......create datasets!', file=TqdmToLogger(logger))])
-        return datasets
+        datasets = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 1) as workhorse:
+            for idx, user in TqdmToLogger(
+                enumerate(raw_train['users']), 
+                logger=logger, 
+                desc=f'[LOAD] [LEAF - {dataset_name.upper()}] ...assigning... ',
+                total=len(raw_train['users'])
+                ):
+                datasets.append(workhorse.submit(_construct_dataset, idx, user).result()) 
+        return dict(ChainMap(*datasets))
     
     # retrieve appropriate dataset module
     dataset_class = getattr(sys.modules[__name__], dataset_name)
-    args.num_classes = NUM_CLASSES[dataset_name.lower()]
     
     # download data
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] Check if raw data exists; if not, start downloading!')
@@ -197,7 +205,7 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
     
     # post-process raw data (split data)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] Post-process raw data to be split into train & test!')
-    args.num_clients = postprocess_leaf(dataset_name.lower(), root, seed, raw_data_fraction=raw_data_fraction, min_samples_per_clients=0, test_data_fraction=test_fraction)
+    args.num_clients = postprocess_leaf(dataset_name.lower(), root, seed, raw_data_fraction=raw_data_fraction, min_samples_per_clients=0, test_fraction=test_fraction)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] ...done post-processing raw data into train & test splits!')
     
     # get raw data
@@ -211,7 +219,9 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
     client_datasets = _assign_to_clients(dataset_name.lower(), dataset_class, raw_train, raw_test, transforms)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] ...instantiated client datasets and created split hashmap!')
     
-    # input channels or number of embeddings
+    # adjust arguments
+    args.num_classes = CONFIG[dataset_name.lower()]['num_classes']
+    args.K = len(client_datasets)
     if 'in_channels' in CONFIG[dataset_name.lower()].keys():
         args.in_channels = CONFIG[dataset_name.lower()]['in_channels']
     if 'seq_len' in CONFIG[dataset_name.lower()].keys():

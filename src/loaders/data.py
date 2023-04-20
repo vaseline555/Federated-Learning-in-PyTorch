@@ -4,12 +4,11 @@ import logging
 import torchtext
 import torchvision
 import transformers
+import concurrent.futures
 
-from tqdm import tqdm
 from collections import ChainMap
-from multiprocessing import pool
 
-from src.utils import TqdmToLogger
+from src import TqdmToLogger
 from src.datasets import *
 from src.loaders.split import simulate_split
 
@@ -75,6 +74,7 @@ def load_dataset(args):
                 torchvision.transforms.RandomRotation(args.randrot) if (args.randrot is not None and train) else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.RandomHorizontalFlip(args.randhf) if (args.randhf is not None and train) else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.RandomVerticalFlip(args.randvf) if (args.randvf is not None and train) else torchvision.transforms.Lambda(lambda x: x),
+                torchvision.transforms.ColorJitter(brightness=args.randjit, contrast=args.randjit, saturation=args.randjit, hue=args.randjit) if (args.randjit is not None and train) else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.ToTensor(),
                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) if args.imnorm else torchvision.transforms.Lambda(lambda x: x)
             ]
@@ -84,7 +84,7 @@ def load_dataset(args):
     # method to construct per-client dataset
     def _construct_dataset(raw_train, idx, sample_indices):
         subset = torch.utils.data.Subset(raw_train, sample_indices)
-        test_size = int(len(subset) * args.eval_fraction)
+        test_size = int(len(subset) * args.test_fraction)
         training_set, test_set = torch.utils.data.random_split(subset, [len(subset) - test_size, test_size])
         traininig_set = SubsetWrapper(training_set, f'< {str(idx).zfill(8)} > (train)')
         test_set = SubsetWrapper(test_set, f'< {str(idx).zfill(8)} > (test)')
@@ -121,7 +121,7 @@ def load_dataset(args):
     
     if args.dataset in ['FEMNIST', 'Shakespeare', 'Sent140', 'CelebA', 'Reddit']: # 1) for a special dataset - LEAF benchmark...
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
          
         # define transform
         if args.dataset in ['FEMNIST', 'CelebA']:
@@ -140,8 +140,7 @@ def load_dataset(args):
             root=args.data_path, 
             seed=args.seed, 
             raw_data_fraction=args.rawsmpl, 
-            test_fraction=args.eval_fraction, 
-            n_jobs=os.cpu_count() - 1, 
+            test_fraction=args.test_fraction, 
             transforms=transforms
         )
 
@@ -181,19 +180,24 @@ def load_dataset(args):
         
     elif args.dataset == 'Heart':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_heart(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
+        split_map, client_datasets, args = fetch_heart(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)
     
     elif args.dataset == 'Adult':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_adult(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
+        split_map, client_datasets, args = fetch_adult(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)
     
     elif args.dataset == 'Cover':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
-        _check_and_raise_error(args.eval_type, 'pfl', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_fraction=args.eval_fraction)  
-        
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
+        split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)  
+    
+    elif args.dataset == 'GLEAM':
+        _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
+        _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
+        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction, seq_len=args.seq_len)
+
     else: # x) for a dataset with no support yet or incorrectly entered...
         err = f'[LOAD] Dataset `{args.dataset}` is not supported or seems incorrectly entered... please check!'
         logger.exception(err)
@@ -206,10 +210,10 @@ def load_dataset(args):
     # adjust the number of classes in binary case
     if args.num_classes == 2:
         args.num_classes = 1
-        args.criterion = torch.nn.BCEWithLogitsLoss
+        args.criterion = 'BCEWithLogitsLoss'
         
     # check if global holdout set is required or not
-    if args.eval_type == 'pfl':
+    if args.eval_type == 'local':
         raw_test = None
     else:
         if raw_test is None:
@@ -226,18 +230,15 @@ def load_dataset(args):
     # construct client datasets if None
     if client_datasets is None:
         logger.info(f'[SIMULATE] Create client datasets!')
-        with pool.ThreadPool(processes=os.cpu_count() - 1) as workhorse:
-            client_datasets = workhorse.starmap(
-                _construct_dataset, 
-                [
-                    (raw_train, idx, sample_indices) for idx, sample_indices in tqdm(
-                        enumerate(split_map.values()),
-                        desc=f'[SIMULATE] ......create client datasets!',
-                        file=TqdmToLogger(logger),
-                        total=len(split_map)
-                    )
-                ]
-            )
-        client_datasets = dict(ChainMap(*client_datasets)) # {client index: (training set, test set)}
-        logger.info(f'[SIMULATE] ...created client datasets!')
+        client_datasets = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.K, os.cpu_count() - 1)) as workhorse:
+            for idx, sample_indices in TqdmToLogger(
+                enumerate(split_map.values()), 
+                logger=logger, 
+                desc=f'[SIMULATE] ...creating client datasets... ',
+                total=len(split_map)
+                ):
+                client_datasets.append(workhorse.submit(_construct_dataset, raw_train, idx, sample_indices).result()) 
+        client_datasets = dict(ChainMap(*client_datasets)) # {client ID: (training set, test set)}
+        logger.info(f'[SIMULATE] ...successfully created client datasets!')
     return raw_test, client_datasets    

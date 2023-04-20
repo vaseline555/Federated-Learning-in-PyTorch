@@ -6,9 +6,7 @@ import torch
 import logging
 import torchtext
 
-from tqdm import tqdm
-
-from src.utils import TqdmToLogger
+from src import TqdmToLogger
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +95,7 @@ def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
 
     def _create_data_from_iterator(vocab, iterator, max_len):
         inputs, targets = [], []
-        for label, tokens in tqdm(iterator, desc=f'[LOAD] [{dataset_name}] ......parse and tokenize!', file=TqdmToLogger(logger), mininterval=10):
+        for label, tokens in TqdmToLogger(iterator, logger=logger):
             tokens = torch.tensor([vocab[token] for token in tokens])
             
             # pad tokens into max length
@@ -113,7 +111,7 @@ def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
     
     def _create_data_from_tokenizer(tokenizer, iterator, max_len):
         inputs, targets = [], []
-        for label, tokens in tqdm(iterator, desc=f'[LOAD] [{dataset_name}] ......parse and tokenize!', file=TqdmToLogger(logger), mininterval=10):
+        for label, tokens in TqdmToLogger(iterator, logger=logger):
             tokens = tokenizer(
                 list(tokens),
                 return_tensors='pt', 

@@ -43,7 +43,7 @@ def letter_to_vec(letter):
     """Convert given letter into index.
     """
     index = ALL_LETTERS.find(letter)
-    return [index]
+    return index
 
 def word_to_indices(word):
     """Convert a word into a list of character indices.

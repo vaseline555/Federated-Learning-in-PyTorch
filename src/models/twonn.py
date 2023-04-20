@@ -8,7 +8,6 @@ class TwoNN(torch.nn.Module): # McMahan et al., 2016; 199,210 parameters
         self.in_features = resize**2
         self.num_hiddens = hidden_size
         self.num_classes = num_classes
-        self.activation = torch.nn.ReLU(True)
         
         self.features = torch.nn.Sequential(
             torch.nn.Flatten(),

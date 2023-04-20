@@ -3,8 +3,6 @@ import shutil
 import logging
 import torchvision
 
-from src.utils import TqdmToLogger
-
 logger = logging.getLogger(__name__)
 
 

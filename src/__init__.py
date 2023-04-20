@@ -1,7 +1,13 @@
 import logging
+import transformers
 
-from .utils import set_seed, Range, TensorBoardRunner
+# turn off unnecessary logging
+transformers.logging.set_verbosity_error()
+
+from .utils import set_seed, Range, TensorBoardRunner, check_args, init_weights, TqdmToLogger, MetricManager
 from .loaders import load_dataset, load_model
+
+
 
 # for logger initialization
 def set_logger(path, args):
@@ -11,7 +17,6 @@ def set_logger(path, args):
         fmt='[%(levelname)s] (%(asctime)s) %(message)s',
         datefmt='%Y/%m/%d %I:%M:%S %p'
     )
-    
     stream_handler = logging.StreamHandler()
     file_handler = logging.FileHandler(path)
     
@@ -23,8 +28,14 @@ def set_logger(path, args):
     logger.setLevel(level=logging.INFO)
     
     # print welcome message
-    logger.info('[WELCOME] Configurations...')
-    for arg in vars(args):
-        logger.info(f'[CONFIG] - {str(arg).upper()}: {getattr(args, arg)}')
-    else:
-        print('\n')
+    logger.info('[WELCOME] Initialize...')
+    welcome_message = """
+    _______ _______ ______  _______  ______ _______ _______ _______ ______ 
+    |______ |______ |     \ |______ |_____/ |_____|    |    |______ |     \\
+    |       |_______|_____/_|_______|__ _\_ |_ ___|_ __|  _ |______ |_____/
+        |      |______ |_____| |_____/ | \  |   |   | \  | |  ____        
+        |_____ |______ |     | |    \_ |  \_| __|__ |  \_| |_____|        
+                                                                    
+                        By. vaseline555 (Seok-Ju Hahn)
+    """
+    logger.info(welcome_message)

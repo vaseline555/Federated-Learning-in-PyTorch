@@ -7,6 +7,8 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+pd.set_option('mode.chained_assignment',  None)
+
 
 
 def preprocess(root):
@@ -86,17 +88,27 @@ def preprocess(root):
         # get index dictionry of each word
         indices = _get_words_indices(vocab)
 
+        # convert user ID into digits
+        user_id_map = {str_id: int_id for int_id, str_id in enumerate(raw_all.index.unique().tolist())}
+        curr_ids = raw_all.index.to_series()
+        raw_all.index = curr_ids.map(user_id_map)
+
+        # refine raw data
+        raw_all = raw_all[raw_all['target'] != 2]
+        raw_all.loc[:, 'target'].replace({4: 1}, inplace=True)
+        raw_all.loc[:, 'text'] = raw_all['text'].apply(lambda x: _line_to_indices(x, indices))
+        raw_all = raw_all.reset_index().groupby('user').agg({'text': lambda x: [i for i in x], 'target': lambda y: [l for l in y]}).rename(columns={'text': 'x', 'target': 'y'})
+        raw_all.index = raw_all.index.astype(str)
+
         # get required elements
-        num_samples = raw_all.groupby('user').apply(len)
-        users = list(num_samples.to_dict().keys())
-        raw_all['target'] = raw_all['target'].replace({4: 1})
-        raw_all['text'] = raw_all['text'].apply(lambda x: _line_to_indices(x, indices))
-        user_data = raw_all.reset_index().groupby('user').agg({'text': lambda x: [i for i in x], 'target': lambda y: [l for l in y]}).rename(columns={'text': 'x', 'target': 'y'}).T.to_dict()
+        users = raw_all.index.tolist()
+        num_samples = raw_all.reset_index().groupby('user').apply(len).values.tolist()
+        user_data = raw_all.T.to_dict()
         
         # create json file
         all_data = {}
         all_data['users'] = users
-        all_data['num_samples'] = num_samples.values.tolist()
+        all_data['num_samples'] = num_samples
         all_data['user_data'] = user_data
         
         # save file

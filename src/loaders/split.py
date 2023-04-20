@@ -1,10 +1,7 @@
-import torch
 import logging
 import numpy as np
 
-from tqdm import tqdm
-
-from src.utils import TqdmToLogger
+from src import TqdmToLogger
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +74,11 @@ def simulate_split(args, dataset):
 
         # assign divided shards to clients
         assigned_shards = []
-        for _ in tqdm(range(args.K), desc='[SIMULATE] ......split data into pathological non-IID!', file=TqdmToLogger(logger)):
+        for _ in TqdmToLogger(
+            range(args.K), 
+            logger=logger,
+            desc='[SIMULATE] ...assigning to clients... '
+            ):
             # update selection proability according to the count of reamining shards
             # i.e., do NOT sample from class having no remaining shards
             selection_prob = np.where(np.array(list(class_shards_counts.values())) > 0, 1., 0.)
@@ -139,7 +140,11 @@ def simulate_split(args, dataset):
 
         # assign divided shards to clients
         assigned_indices = []
-        for k in tqdm(range(args.K), desc='[SIMULATE] ......split data into Dirichlet-based non-IID!', file=TqdmToLogger(logger)):
+        for k in TqdmToLogger(
+            range(args.K), 
+            logger=logger,
+            desc='[SIMULATE] ...assigning to clients... '
+            ):
             # update mask according to the count of reamining samples per class
             # i.e., do NOT sample from class having no remaining samples
             remaining_mask = np.where(np.array(list(class_samples_counts.values())) > 0, 1., 0.)

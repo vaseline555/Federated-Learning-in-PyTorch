@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 
-def postprocess_leaf(dataset_name, root, seed, raw_data_fraction, min_samples_per_clients, test_data_fraction):
+def postprocess_leaf(dataset_name, root, seed, raw_data_fraction, min_samples_per_clients, test_fraction):
     # check if raw data is prepared 
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] Check pre-processing data...!')
     if not os.path.exists(f'{root}/{dataset_name}/all_data'):
@@ -39,7 +39,7 @@ def postprocess_leaf(dataset_name, root, seed, raw_data_fraction, min_samples_pe
             os.makedirs(f'{root}/{dataset_name}/train')
         if not os.path.exists(f'{root}/{dataset_name}/test'):
             os.makedirs(f'{root}/{dataset_name}/test')    
-        split_datasets(dataset_name, root, seed, test_data_fraction)
+        split_datasets(dataset_name, root, seed, test_fraction)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] ...done splitting into training & test sets!')
     
     # get number of clients
