@@ -75,7 +75,7 @@ def fetch_cover(args, root, seed, test_fraction):
         df_raw.columns = COL_NAME
 
         # split by wilderness area
-        client_datasets = dict()
+        client_datasets = []
         for idx, name in enumerate(AREA):
             # get dataframe
             df_temp = df_raw[df_raw['wilderness_area'] == idx].reset_index(drop=True)

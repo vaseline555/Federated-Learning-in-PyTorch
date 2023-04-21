@@ -84,8 +84,9 @@ if __name__ == "__main__":
     - LEAF benchmarks [ FEMNIST | Sent140 | Shakespeare | CelebA | Reddit ],
     - among [ TinyImageNet | CINIC10 | BeerReviewsA | BeerReviewsL | Heart | Adult | Cover | GLEAM ]
     ''', type=str, required=True)
-    parser.add_argument('--test_fraction', help='fraction of hold-out dataset for evaluation', type=float, choices=[Range(0., 9e-1)], default=0.2)
-
+    parser.add_argument('--test_fraction', help='fraction of local hold-out dataset for evaluation', type=float, choices=[Range(0., 9e-1)], default=0.2)
+    parser.add_argument('--rawsmpl', help='fraction of raw data to be used (only used when one of `LEAF` datasets is used)', type=float, choices=[Range(0., 1.)], default=1.0)
+    
     ## data augmentation arguments
     parser.add_argument('--resize', help='resize input images (using `torchvision.transforms.Resize`)', type=int, default=28)
     parser.add_argument('--imnorm', help='normalize channels using ImageNet pre-trained mean & standard deviation (using `torchvision.transforms.Normalize`)', action='store_true')
@@ -104,7 +105,7 @@ if __name__ == "__main__":
     ''', type=str, choices=['iid', 'unbalanced', 'patho', 'diri', 'pre'], required=True)
     parser.add_argument('--mincls', help='the minimum number of distinct classes per client (only used when `split_type` is `patho`)', type=int, default=2)
     parser.add_argument('--cncntrtn', help='a concentration parameter for Dirichlet distribution (only used when `split_type` is `diri`)', type=float, default=0.1)
-    parser.add_argument('--rawsmpl', help='fraction of raw data to be used (only used when one of `LEAF` datasets is used)', type=float, choices=[Range(0., 1.)], default=1.0)
+    
     
     ###################
     # Model arguments #

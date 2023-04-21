@@ -108,9 +108,9 @@ def fetch_heart(args, root, seed, test_fraction):
         logger.info(f'[LOAD] [HEART] ...raw data already exists!')
     
     logger.info(f'[LOAD] [HEART] Munging and splitting dataset!')
-    client_datasets = dict()
-    for idx, hospital in enumerate(URL.keys()):
-        client_datasets[idx] = _munge_and_split(os.path.join(root, 'heart'), hospital, seed, test_fraction)
+    client_datasets = []
+    for hospital in URL.keys():
+        client_datasets.append(_munge_and_split(os.path.join(root, 'heart'), hospital, seed, test_fraction))
     logger.info('[LOAD] [HEART] ...munged and splitted dataset!')
     
     args.in_features = 13

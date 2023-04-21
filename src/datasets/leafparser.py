@@ -8,7 +8,6 @@ import importlib
 import concurrent.futures
 
 from abc import abstractmethod
-from collections import ChainMap
 
 from src import TqdmToLogger
 from src.datasets.leaf import *
@@ -27,15 +26,11 @@ class LEAFDataset(torch.utils.data.Dataset):
     
     @abstractmethod
     def make_dataset(self):
-        err = '[LEAF] A sub-module should implement this method!'
-        logger.exception(err)
-        raise NotImplementedError(err)
+        raise NotImplementedError
         
     @abstractmethod
     def __getitem__(self, index):
-        err = '[LEAF] A sub-module should implement this method!'
-        logger.exception(err)
-        raise NotImplementedError(err)
+        raise NotImplementedError
     
     def __len__(self):
         return self.num_samples
@@ -75,9 +70,7 @@ class Shakespeare(LEAFDataset):
         self.num_classes =  num_classes
 
     def make_dataset(self):
-        inputs, targets = self.data['x'], self.data['y']
-        self.inputs = torch.tensor([word_to_indices(word) for word in inputs]).long()
-        self.targets = torch.tensor([letter_to_vec(char) for char in targets]).long()
+        self.inputs, self.targets = torch.tensor(self.data['x']).long(), torch.tensor(self.data['y']).long()
         self.num_samples = len(self.inputs)
 
     def __getitem__(self, index):
@@ -159,13 +152,13 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
             tr_dset, te_dset = dataset_class(**CONFIG[dataset_name]), dataset_class(**CONFIG[dataset_name])
             
             # set essential attributes for training
-            tr_dset.identifier = f'[{dataset_name.upper()}] CLIENT < {str(user).zfill(8)} > (train)'
+            tr_dset.identifier = f'[LOAD] [{dataset_name.upper()}] CLIENT < {str(user).zfill(8)} > (train)'
             tr_dset.data = raw_train['user_data'][user]
             tr_dset.num_samples = raw_train['num_samples'][idx]
             tr_dset.make_dataset()
             
             # set essential attributes for test
-            te_dset.identifier = f'[{dataset_name.upper()}] CLIENT < {str(user).zfill(8)} > (test)'
+            te_dset.identifier = f'[LOAD] [{dataset_name.upper()}] CLIENT < {str(user).zfill(8)} > (test)'
             te_dset.data = raw_test['user_data'][user]
             te_dset.num_samples = raw_test['num_samples'][idx]
             te_dset.make_dataset()
@@ -173,7 +166,7 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
             # transplant transform method
             tr_dset.transform = transforms[0]
             te_dset.transform = transforms[1]
-            return {user: (tr_dset, te_dset)}
+            return (tr_dset, te_dset)
         
         datasets = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count() - 1) as workhorse:
@@ -184,7 +177,7 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
                 total=len(raw_train['users'])
                 ):
                 datasets.append(workhorse.submit(_construct_dataset, idx, user).result()) 
-        return dict(ChainMap(*datasets))
+        return datasets
     
     # retrieve appropriate dataset module
     dataset_class = getattr(sys.modules[__name__], dataset_name)

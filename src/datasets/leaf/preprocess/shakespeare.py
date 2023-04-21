@@ -20,7 +20,7 @@ def preprocess(root):
     # `The Comedy of Errors` has errors in its indentation so we need to use different regular expressions
     COE_CHARACTER_RE = re.compile(r'^([a-zA-Z][a-zA-Z ]*)\. (.*)')
     COE_CONT_RE = re.compile(r'^(.*)')
-
+        
     def _split_into_plays(shakespeare_full):
         """Splits the full data by plays.
         """
@@ -166,20 +166,25 @@ def preprocess(root):
             Returns:
                 (inputs, targets)
             """
+            ALL_LETTERS = "\n !\"&'(),-.0123456789:;>?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]abcdefghijklmnopqrstuvwxyz}"
+            TOKEN_DICT = {char: idx for idx, char in enumerate(ALL_LETTERS)}
+
             raw_text = ""
             with open(txt_path, 'r') as file:
                 raw_text = file.read()
             raw_text = raw_text.replace('\n', ' ')
             raw_text = re.sub(r'   *', r' ', raw_text)
-
+            tokenized = [TOKEN_DICT[char] for char in list(raw_text)]
+            
             inputs, targets = [], []
             for i in range(0, len(raw_text) - seq_length, 1):
-                seq_in = raw_text[i:i + seq_length]
-                seq_out = raw_text[i + seq_length]
+                seq_in = tokenized[i:i + seq_length]
+                seq_out = tokenized[i + seq_length]
+                
                 inputs.append(seq_in)
                 targets.append(seq_out)
             return inputs, targets
-        
+
         data_path = os.path.join(path, 'by_play_and_character')
         users_and_plays_path = os.path.join(path, 'intermediate', 'users_and_plays.json')
     
@@ -194,6 +199,7 @@ def preprocess(root):
             if len(inputs) > 0:
                 users.append(user)
                 user_data[user] = {'x': inputs, 'y': targets}
+
                 hierarchies.append(users_and_plays[user])
                 num_samples.append(len(targets))
 
@@ -248,6 +254,6 @@ def preprocess(root):
     logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] ...wrote files!')
     
     # prase and convert to json format
-    logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] Convert data to json format...!')
+    logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] Convert data to json format... (this may take several minutes)!')
     _convert_to_json(path) 
     logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] ...finished converting data to json format!')

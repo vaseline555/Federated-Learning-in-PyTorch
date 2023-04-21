@@ -6,8 +6,6 @@ import torchvision
 import transformers
 import concurrent.futures
 
-from collections import ChainMap
-
 from src import TqdmToLogger
 from src.datasets import *
 from src.loaders.split import simulate_split
@@ -88,7 +86,7 @@ def load_dataset(args):
         training_set, test_set = torch.utils.data.random_split(subset, [len(subset) - test_size, test_size])
         traininig_set = SubsetWrapper(training_set, f'< {str(idx).zfill(8)} > (train)')
         test_set = SubsetWrapper(test_set, f'< {str(idx).zfill(8)} > (test)')
-        return {idx: (traininig_set, test_set)}
+        return (traininig_set, test_set)
     
     #################
     # base settings #
@@ -217,7 +215,7 @@ def load_dataset(args):
         raw_test = None
     else:
         if raw_test is None:
-            err = f'[LOAD] Dataset `{args.dataset.upper()}` does not support pre-defined evaluation set, please check! (current `eval_type`=`{args.eval_type}`)'
+            err = f'[LOAD] Dataset `{args.dataset.upper()}` does not support pre-defined validation/test set, which can be used for `global` evluation... please check! (current `eval_type`=`{args.eval_type}`)'
             logger.exception(err)
             raise AssertionError(err)
             
@@ -239,6 +237,5 @@ def load_dataset(args):
                 total=len(split_map)
                 ):
                 client_datasets.append(workhorse.submit(_construct_dataset, raw_train, idx, sample_indices).result()) 
-        client_datasets = dict(ChainMap(*client_datasets)) # {client ID: (training set, test set)}
         logger.info(f'[SIMULATE] ...successfully created client datasets!')
     return raw_test, client_datasets    

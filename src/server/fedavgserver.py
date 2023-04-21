@@ -60,14 +60,14 @@ class FedavgServer(BaseServer):
         def __create_client(identifier, datasets):
             client = CLINET_CLASS(args=self.args, training_set=datasets[0], test_set=datasets[-1])
             client.id = identifier
-            return {identifier: client}
+            return client
 
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Create clients!')
         
         clients = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(int(self.args.K), os.cpu_count() - 1)) as workhorse:
             for identifier, datasets in TqdmToLogger(
-                client_datasets.items(), 
+                enumerate(client_datasets), 
                 logger=logger, 
                 desc=f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...creating clients... ',
                 total=len(client_datasets)
@@ -75,7 +75,7 @@ class FedavgServer(BaseServer):
                 clients.append(workhorse.submit(__create_client, identifier, datasets).result())            
         
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...sucessfully created {self.args.K} clients!')
-        return dict(ChainMap(*clients)) 
+        return clients
 
     def _broadcast_models(self, ids):
         def __broadcast_model(client):
@@ -101,16 +101,16 @@ class FedavgServer(BaseServer):
         # Update - randomly select max(floor(C * K), 1) clients
         if exclude == []: 
             num_sampled_clients = max(int(self.args.C * self.args.K), 1)
-            sampled_client_ids = sorted(random.sample(self.clients.keys(), num_sampled_clients))
+            sampled_client_ids = sorted(random.sample([i for i in range(self.args.K)], num_sampled_clients))
         # Evaluation - randomly select unparticipated clients in amount of `eval_fraction` multiplied
         else: 
             num_unparticipated_clients = self.args.K - len(exclude)
             if num_unparticipated_clients == 0: # when C = 1, i.e., need to evaluate on all clients
                 num_sampled_clients = self.args.K
-                sampled_client_ids = sorted(self.clients.keys())
+                sampled_client_ids = sorted([i for i in range(self.args.K)])
             else:
                 num_sampled_clients = max(int(self.args.eval_fraction * num_unparticipated_clients), 1)
-                sampled_client_ids = sorted(random.sample([identifier for identifier in self.clients.keys() if identifier not in exclude], num_sampled_clients))
+                sampled_client_ids = sorted(random.sample([identifier for identifier in [i for i in range(self.args.K)] if identifier not in exclude], num_sampled_clients))
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...{num_sampled_clients} clients are selected!')
         return sampled_client_ids
 

@@ -4,15 +4,12 @@ import logging
 import requests
 import torchvision
 
-import numpy as np
-
 logger = logging.getLogger(__name__)
 
-__all__ = ['letter_to_vec', 'word_to_indices', 'download_data']
+__all__ = ['download_data']
 
 
 
-ALL_LETTERS = "\n !\"&'(),-.0123456789:;>?ABCDEFGHIJKLMNOPQRSTUVWXYZ[]abcdefghijklmnopqrstuvwxyz}"
 URL = {
     'femnist': [
         'https://s3.amazonaws.com/nist-srd/SD19/by_class.zip',
@@ -37,21 +34,6 @@ OPT = { # md5 checksum if direct URL link is provided, file name if Google Drive
     'celeba': ['identity_CelebA.txt', 'list_attr_celeba.txt', '00d2c5bc6d35e252742224ab0c1e8fcb'],
     'reddit': ['reddit_subsampled.zip']
 }
-    
-    
-def letter_to_vec(letter):
-    """Convert given letter into index.
-    """
-    index = ALL_LETTERS.find(letter)
-    return index
-
-def word_to_indices(word):
-    """Convert a word into a list of character indices.
-    """
-    indices = []
-    for c in word:
-        indices.append(ALL_LETTERS.find(c))
-    return indices
 
 def download_data(download_root, dataset_name):
     """Download data from Google Drive and extract if it is archived.
@@ -88,7 +70,7 @@ def download_data(download_root, dataset_name):
             print(f'...successfully extracted `{file_name}` at `{download_root}`!')
                 
     # download data from web
-    logger.info(f'[LEAF - {dataset_name.upper()}] Start downloading data...!')
+    logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] Start downloading data...!')
     try:
         for (url, opt) in zip(URL[dataset_name], OPT[dataset_name]):
             if 'http' not in url:

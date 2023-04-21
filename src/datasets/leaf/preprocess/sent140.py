@@ -104,7 +104,7 @@ def preprocess(root):
         users = raw_all.index.tolist()
         num_samples = raw_all.reset_index().groupby('user').apply(len).values.tolist()
         user_data = raw_all.T.to_dict()
-        
+
         # create json file
         all_data = {}
         all_data['users'] = users

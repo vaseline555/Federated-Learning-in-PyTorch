@@ -115,9 +115,9 @@ def fetch_adult(args, root, seed, test_fraction):
     logger.info('[LOAD] [ADULT] ...munged dataset and created clients!!')
     
     logger.info(f'[LOAD] [ADULT] Processing client datsets!')
-    client_datasets = dict()
-    for idx, dataset in enumerate(raw_clients.values()):
-        client_datasets[idx] = _process_client_datasets(dataset, seed, test_fraction)
+    client_datasets = []
+    for dataset in raw_clients.values():
+        client_datasets.apend(_process_client_datasets(dataset, seed, test_fraction))
     logger.info('[LOAD] [ADULT] ...processed client datasets!')
     
     args.in_features = 84
