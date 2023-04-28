@@ -17,7 +17,7 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * `Unbalanced` (i.e., sample counts heterogeneity)
 * `Pathological Non-IID` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
 * `Dirichlet distribution-based Non-IID` ([Hsu et al., 2019](https://arxiv.org/abs/1909.06335))
-* `Pre-defined` (for datasets having natural semantic separation, including `LEAF` benchmark ([Caldas et al., 2018](https://arxiv.org/abs/1812.01097))
+* `Pre-defined` (for datasets having natural semantic separation, including `LEAF` benchmark ([Caldas et al., 2018](https://arxiv.org/abs/1812.01097)))
 ### Models
 * `LogReg` (logistic regression), `GRUClassifier` (GRU-cell based classifier)
 * `TwoNN`, `TwoCNN`, `NextCharLSTM`, `NextWordLSTM` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
@@ -28,7 +28,7 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * `FedAvg` and `FedSGD` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
 * `FedProx` ([Li et al., 2018](https://arxiv.org/abs/1812.06127))
 ### Evaluation schemes
-* `local`: evaluate FL algorithm using holdout set of (some/all) clients NOT participating in the current round.
+* `local`: evaluate FL algorithm using holdout set of (some/all) clients NOT participating in the current round. (i.e., evaluation of personalized federated learning setting)
 * `global`: evaluate FL algorithm using global holdout set located at the server. (*ONLY available if the raw dataset supports pre-defined validation/test set*).
 * `both`: evaluate FL algorithm using both `local` and `global` schemes.
 ### Metrics
@@ -39,7 +39,7 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * $R^2$, $D^2$
 
 ## Requirements
-* See `requirements.txt`.
+* See `requirements.txt`. (I recommend to build an independent environment for this project, using e.g., `Docker` or `conda`)
 * When you install `torchtext`, please check the version compatibility with `torch`. (See [official installation guide](https://github.com/pytorch/text#installation))
 * Plus, please install `torch`-related packages using one command provided by the official guide (See [official repository](https://pytorch.org/get-started/locally/)); e.g., `conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 torchtext==0.13.0 cudatoolkit=11.6 -c pytorch -c conda-forge` 
 

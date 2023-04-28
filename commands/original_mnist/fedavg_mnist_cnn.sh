@@ -7,7 +7,7 @@ do
     for c in 0.0 0.1 0.2 0.5 1.0
     do
         python3 main.py \
-            --exp_name FedAvg_MNIST_CNN_IID_C$c_B$b --seed 42 --device cuda \
+            --exp_name "FedAvg_MNIST_CNN_IID_C${c}_B${b}" --seed 42 --device cuda \
             --dataset MNIST \
             --split_type iid --test_fraction 0 \
             --model_name TwoCNN --resize 28 --hidden_size 200 \
@@ -23,7 +23,7 @@ do
     for c in 0.0 0.1 0.2 0.5 1.0
     do
         python3 main.py \
-            --exp_name FedAvg_MNIST_CNN_Patho_C$c_B$b --seed 42 --device cuda \
+            --exp_name "FedAvg_MNIST_CNN_Patho_C${c}_B${b}" --seed 42 --device cuda \
             --dataset MNIST \
             --split_type patho --test_fraction 0 \
             --model_name TwoCNN --resize 28 --hidden_size 200 \

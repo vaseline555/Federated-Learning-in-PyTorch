@@ -1,5 +1,5 @@
 import os
-import copy
+import gc
 import json
 import torch
 import random
@@ -36,7 +36,7 @@ class FedavgServer(BaseServer):
         self.server_optimizer = self._get_algorithm(self.model, lr=self.args.lr, momentum=self.args.beta)
 
         # lr scheduler
-        self.lr_scheduler = torch.optim.lr_scheduler.ConstantLR(self.server_optimizer, factor=self.args.lr_decay, total_iters=self.args.lr_decay_step)
+        self.lr_scheduler = torch.optim.lr_scheduler.StepLR(self.server_optimizer, gamma=self.args.lr_decay, step_size=self.args.lr_decay_step)
 
         # clients
         self.clients = self._create_clients(client_datasets)
@@ -117,11 +117,7 @@ class FedavgServer(BaseServer):
     def _log_results(self, resulting_sizes, results, eval, participated):
         losses, metrics, num_samples = list(), defaultdict(list), list()
         for identifier, result in results.items():
-            if len(str(identifier)) > 8:
-                stdout_id = f'{str(identifier)[:6]}..'
-            else:
-                stdout_id = str(identifier).zfill(8)
-            client_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDDATE"}] [CLIENT] < {stdout_id} > '
+            client_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDATE"}] [CLIENT] < {str(identifier).zfill(6)} > '
 
             # get loss and metrics
             if eval:
@@ -245,7 +241,7 @@ class FedavgServer(BaseServer):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Aggregate updated signals!')
 
         # calculate mixing coefficients according to sample sizes
-        coefficients = {identifier: coefficient / sum(updated_sizes.values()) for identifier, coefficient in updated_sizes.items()}
+        coefficients = {identifier: float(coefficient / sum(updated_sizes.values())) for identifier, coefficient in updated_sizes.items()}
         
         # accumulate weights
         for identifier in ids:
@@ -256,7 +252,6 @@ class FedavgServer(BaseServer):
     def _cleanup(self, indices):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Clean up!')
 
-        # accumulate weights
         for identifier in indices:
             if self.clients[identifier].model is not None:
                 self.clients[identifier].model = None
@@ -265,6 +260,7 @@ class FedavgServer(BaseServer):
                 logger.exception(err)
                 raise AssertionError(err)
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully cleaned up!')
+        gc.collect()
 
 
     @torch.inference_mode()

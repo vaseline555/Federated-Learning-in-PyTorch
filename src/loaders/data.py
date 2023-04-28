@@ -1,4 +1,5 @@
 import os
+import gc
 import torch
 import logging
 import torchtext
@@ -238,4 +239,5 @@ def load_dataset(args):
                 ):
                 client_datasets.append(workhorse.submit(_construct_dataset, raw_train, idx, sample_indices).result()) 
         logger.info(f'[SIMULATE] ...successfully created client datasets!')
+    gc.collect()
     return raw_test, client_datasets    
