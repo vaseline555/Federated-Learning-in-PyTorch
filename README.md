@@ -40,8 +40,8 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 
 ## Requirements
 * See `requirements.txt`. (I recommend to build an independent environment for this project, using e.g., `Docker` or `conda`)
-* When you install `torchtext`, please check the version compatibility with `torch`. (See [official installation guide](https://github.com/pytorch/text#installation))
-* Plus, please install `torch`-related packages using one command provided by the official guide (See [official repository](https://pytorch.org/get-started/locally/)); e.g., `conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 torchtext==0.13.0 cudatoolkit=11.6 -c pytorch -c conda-forge` 
+* When you install `torchtext`, please check the version compatibility with `torch`. (See [official repository](https://github.com/pytorch/text#installation))
+* Plus, please install `torch`-related packages using one command provided by the official guide (See [official installation guide](https://pytorch.org/get-started/locally/)); e.g., `conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 torchtext==0.13.0 cudatoolkit=11.6 -c pytorch -c conda-forge` 
 
 ## Configurations
 * See `python3 main.py -h`.
