@@ -17,6 +17,7 @@ class Acc1(BaseMetric):
     def __init__(self):
         self.scores = []
         self.answers = []
+        self._use_youdenj = False
 
     def collect(self, pred, true):
         p, t = pred.detach().cpu(), true.detach().cpu()
@@ -29,10 +30,13 @@ class Acc1(BaseMetric):
 
         if scores.size(-1) > 1: # multi-class
             labels = scores.argmax(-1).numpy()
-        else: # binary - use Youden's J to determine label
+        else: 
             scores = scores.sigmoid().numpy()
-            fpr, tpr, thresholds = roc_curve(answers, scores)
-            cutoff = thresholds[np.argmax(tpr - fpr)]
+            if self._use_youdenj: # binary - use Youden's J to determine a label
+                fpr, tpr, thresholds = roc_curve(answers, scores)
+                cutoff = thresholds[np.argmax(tpr - fpr)]
+            else:
+                cutoff = 0.5
             labels = np.where(scores >= cutoff, 1, 0)
         return accuracy_score(answers, labels)
 
@@ -41,6 +45,7 @@ class Acc5(BaseMetric):
     def __init__(self):
         self.scores = []
         self.answers = []
+        self._use_youdenj = False
 
     def collect(self, pred, true):
         p, t = pred.detach().cpu(), true.detach().cpu()
@@ -104,6 +109,7 @@ class F1(BaseMetric):
     def __init__(self):
         self.scores = []
         self.answers = []
+        self._use_youdenj = False
 
     def collect(self, pred, true):
         p, t = pred.detach().cpu(), true.detach().cpu()
@@ -116,10 +122,13 @@ class F1(BaseMetric):
 
         if scores.size(-1) > 1: # multi-class
             labels = scores.argmax(-1).numpy()
-        else: # binary - use Youden's J to determine label
+        else: 
             scores = scores.sigmoid().numpy()
-            fpr, tpr, thresholds = roc_curve(answers, scores)
-            cutoff = thresholds[np.argmax(tpr - fpr)]
+            if self._use_youdenj: # binary - use Youden's J to determine a label
+                fpr, tpr, thresholds = roc_curve(answers, scores)
+                cutoff = thresholds[np.argmax(tpr - fpr)]
+            else:
+                cutoff = 0.5
             labels = np.where(scores >= cutoff, 1, 0)
         return f1_score(answers, labels, average='weighted', zero_division=0)
 
@@ -127,6 +136,7 @@ class Precision(BaseMetric):
     def __init__(self):
         self.scores = []
         self.answers = []
+        self._use_youdenj = False
 
     def collect(self, pred, true):
         p, t = pred.detach().cpu(), true.detach().cpu()
@@ -139,10 +149,13 @@ class Precision(BaseMetric):
 
         if scores.size(-1) > 1: # multi-class
             labels = scores.argmax(-1).numpy()
-        else: # binary - use Youden's J to determine label
+        else: 
             scores = scores.sigmoid().numpy()
-            fpr, tpr, thresholds = roc_curve(answers, scores)
-            cutoff = thresholds[np.argmax(tpr - fpr)]
+            if self._use_youdenj: # binary - use Youden's J to determine a label
+                fpr, tpr, thresholds = roc_curve(answers, scores)
+                cutoff = thresholds[np.argmax(tpr - fpr)]
+            else:
+                cutoff = 0.5
             labels = np.where(scores >= cutoff, 1, 0)
         return precision_score(answers, labels, average='weighted', zero_division=0)
 
@@ -150,6 +163,7 @@ class Recall(BaseMetric):
     def __init__(self):
         self.scores = []
         self.answers = []
+        self._use_youdenj = False
 
     def collect(self, pred, true):
         p, t = pred.detach().cpu(), true.detach().cpu()
@@ -162,10 +176,13 @@ class Recall(BaseMetric):
 
         if scores.size(-1) > 1: # multi-class
             labels = scores.argmax(-1).numpy()
-        else: # binary - use Youden's J to determine label
+        else: 
             scores = scores.sigmoid().numpy()
-            fpr, tpr, thresholds = roc_curve(answers, scores)
-            cutoff = thresholds[np.argmax(tpr - fpr)]
+            if self._use_youdenj: # binary - use Youden's J to determine a label
+                fpr, tpr, thresholds = roc_curve(answers, scores)
+                cutoff = thresholds[np.argmax(tpr - fpr)]
+            else:
+                cutoff = 0.5
             labels = np.where(scores >= cutoff, 1, 0)
         return recall_score(answers, labels, average='weighted', zero_division=0)
 
@@ -227,21 +244,6 @@ class Mae(BaseMetric):
         scores = torch.cat(self.scores).numpy()
         answers = torch.cat(self.answers).numpy()
         return mean_absolute_error(answers, scores)
-
-class Mape(BaseMetric):
-    def __init__(self):
-        self.scores = []
-        self.answers = []
-
-    def collect(self, pred, true):
-        p, t = pred.detach().cpu(), true.detach().cpu()
-        self.scores.append(p)
-        self.answers.append(t)
-
-    def summarize(self):
-        scores = torch.cat(self.scores).numpy()
-        answers = torch.cat(self.answers).numpy()
-        return mean_absolute_percentage_error(answers, scores)
 
 class Mape(BaseMetric):
     def __init__(self):

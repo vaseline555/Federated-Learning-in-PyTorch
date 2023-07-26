@@ -33,7 +33,7 @@ class Cover(torch.utils.data.Dataset):
 
 # helper method to fetch Cover type classification dataset 
 # NOTE: data is grouped and split by `wilderness_area`
-def fetch_cover(args, root, seed, test_fraction):
+def fetch_cover(args, root, seed, test_size):
     URL = 'http://archive.ics.uci.edu/ml/machine-learning-databases/covtype/covtype.data.gz'
     MD5 = '99670d8d942f09d459c7d4486fca8af5'
     COL_NAME = [
@@ -61,7 +61,7 @@ def fetch_cover(args, root, seed, test_fraction):
         )
         os.rename(os.path.join(root, 'covtype.data'), os.path.join(root, 'covtype.csv'))
     
-    def _munge_and_split(root, seed, test_fraction):
+    def _munge_and_split(root, seed, test_size):
         # load data
         df = pd.read_csv(os.path.join(root, 'covtype.csv'), header=None)
         
@@ -84,7 +84,7 @@ def fetch_cover(args, root, seed, test_fraction):
             inputs, targets = df_temp.iloc[:, :-1].values.astype('float'), df_temp.iloc[:, -1].values.astype('float')
         
             # train-test split with stratified manner
-            train_inputs, test_inputs, train_targets, test_targets = train_test_split(inputs, targets, test_size=test_fraction, random_state=seed, stratify=targets)
+            train_inputs, test_inputs, train_targets, test_targets = train_test_split(inputs, targets, test_size=test_size, random_state=seed, stratify=targets)
 
             # scaling inputs
             scaler = StandardScaler()
@@ -106,7 +106,7 @@ def fetch_cover(args, root, seed, test_fraction):
         logger.info(f'[LOAD] [COVER] ...raw data already exists!')
     
     logger.info(f'[LOAD] [COVER] Munging and splitting dataset!')
-    client_datasets = _munge_and_split(os.path.join(root, 'covertype'), seed, test_fraction)
+    client_datasets = _munge_and_split(os.path.join(root, 'covertype'), seed, test_size)
     logger.info('[LOAD] [COVER] ...munged and splitted dataset!')
     
     args.in_features = 51

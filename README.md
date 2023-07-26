@@ -1,6 +1,6 @@
 
 # Federated Learning in PyTorch
-Implementations of various Federated Learning (FL) algorithms in PyTorch, especially for research purpose.
+Implementations of various Federated Learning (FL) algorithms in PyTorch, especially for research purposes.
 
 ## Implementation Details
 ### Datasets
@@ -11,7 +11,7 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * Supports additional text classification datasets ([`BeerReviews`](https://snap.stanford.edu/data/web-BeerAdvocate.html)).
 * Supports tabular datasets ([`Heart`, `Adult`, `Cover`](https://archive.ics.uci.edu/ml/index.php)).
 * Supports temporal dataset ([`GLEAM`](http://www.skleinberg.org/data.html))
-* __NOTE__: don't bother to search raw files of datasets; dataset can automatically be downloaded to the designated path by just passing its name!
+* __NOTE__: don't bother to search raw files of datasets; the dataset can automatically be downloaded to the designated path by just passing its name!
 ### Statistical Heterogeneity Simulations
 * `IID` (i.e., statistical homogeneity)
 * `Unbalanced` (i.e., sample counts heterogeneity)
@@ -28,7 +28,7 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * `FedAvg` and `FedSGD` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
 * `FedProx` ([Li et al., 2018](https://arxiv.org/abs/1812.06127))
 ### Evaluation schemes
-* `local`: evaluate FL algorithm using holdout set of (some/all) clients NOT participating in the current round. (i.e., evaluation of personalized federated learning setting)
+* `local`: evaluate FL algorithm using holdout sets of (some/all) clients NOT participating in the current round. (i.e., evaluation of personalized federated learning setting)
 * `global`: evaluate FL algorithm using global holdout set located at the server. (*ONLY available if the raw dataset supports pre-defined validation/test set*).
 * `both`: evaluate FL algorithm using both `local` and `global` schemes.
 ### Metrics
@@ -39,7 +39,7 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * $R^2$, $D^2$
 
 ## Requirements
-* See `requirements.txt`. (I recommend to build an independent environment for this project, using e.g., `Docker` or `conda`)
+* See `requirements.txt`. (I recommend building an independent environment for this project, using e.g., `Docker` or `conda`)
 * When you install `torchtext`, please check the version compatibility with `torch`. (See [official repository](https://github.com/pytorch/text#installation))
 * Plus, please install `torch`-related packages using one command provided by the official guide (See [official installation guide](https://pytorch.org/get-started/locally/)); e.g., `conda install pytorch==1.12.0 torchvision==0.13.0 torchaudio==0.12.0 torchtext==0.13.0 cudatoolkit=11.6 -c pytorch -c conda-forge` 
 
@@ -50,10 +50,10 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * See shell files prepared in `commands` directory.
 
 ## TODO
-- [ ] Support another models, especially lightweight ones for cross-device FL setting. (e.g., [`EdgeNeXt`](https://github.com/mmaaz60/EdgeNeXt))
-- [ ] Support another structured datasets including temporal and tabular data, along with datasets suitable for cross-silo FL setting. (e.g., [`MedMNIST`](https://github.com/MedMNIST/MedMNIST))
+- [ ] Support another model, especially lightweight ones for cross-device FL setting. (e.g., [`EdgeNeXt`](https://github.com/mmaaz60/EdgeNeXt))
+- [ ] Support another structured dataset including temporal and tabular data, along with datasets suitable for cross-silo FL setting. (e.g., [`MedMNIST`](https://github.com/MedMNIST/MedMNIST))
 - [ ] Add other popular FL algorithms including personalized FL algorithms (e.g., [`SuPerFed`](https://arxiv.org/abs/2109.07628)).
 - [ ] Attach benchmark results of sample commands.
 
 ## Contact
-Should you have any feedback, please create a thread in __issue__ tab, or contact me via `sjhahn11512@gmail.com`. Thank you :)
+Should you have any feedback, please create a thread in __issue__ tab. Thank you :)

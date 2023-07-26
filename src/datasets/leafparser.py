@@ -131,7 +131,7 @@ class Reddit(LEAFDataset):
     def __getitem__(self, index):
         return self.inputs[index], self.targets[index]
 
-def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction, transforms):
+def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_size, transforms):
     CONFIG = {
         'femnist': {'in_channels': 1, 'num_classes': 62},
         'shakespeare': {'num_embeddings': 80, 'num_classes': 80},
@@ -198,7 +198,7 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_fraction,
     
     # post-process raw data (split data)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] Post-process raw data to be split into train & test!')
-    args.num_clients = postprocess_leaf(dataset_name.lower(), root, seed, raw_data_fraction=raw_data_fraction, min_samples_per_clients=0, test_fraction=test_fraction)
+    args.num_clients = postprocess_leaf(dataset_name.lower(), root, seed, raw_data_fraction=raw_data_fraction, min_samples_per_clients=0, test_size=test_size)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] ...done post-processing raw data into train & test splits!')
     
     # get raw data

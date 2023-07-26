@@ -43,7 +43,7 @@ class FedavgClient(BaseClient):
         for e in range(self.args.E):
             for inputs, targets in self.train_loader:
                 inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
-
+ 
                 outputs = self.model(inputs)
                 loss = self.criterion()(outputs, targets)
 
@@ -59,7 +59,7 @@ class FedavgClient(BaseClient):
 
     @torch.inference_mode()
     def evaluate(self):
-        if self.args._train_only: # `args.test_fraction` == 0
+        if self.args._train_only: # `args.test_size` == 0
             return {'loss': -1, 'metrics': {'none': -1}}
 
         mm = MetricManager(self.args.eval_metrics)
@@ -85,7 +85,7 @@ class FedavgClient(BaseClient):
         return self.model.named_parameters()
     
     def __len__(self):
-        return len(self.training_set), len(self.test_set)
+        return len(self.training_set)
 
     def __repr__(self):
         return f'CLIENT < {self.id} >'

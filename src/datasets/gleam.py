@@ -29,7 +29,7 @@ class GLEAM(torch.utils.data.Dataset):
 
 # helper method to fetch GLEAM activity classification dataset 
 # NOTE: data is split by person
-def fetch_gleam(args, root, seed, test_fraction, seq_len):
+def fetch_gleam(args, root, seed, test_size, seq_len):
     URL = 'http://www.skleinberg.org/data/GLEAM.tar.gz'
     MD5 = '10ad34716546e44c5078d392f25031e1'
     MINMAX = {
@@ -53,7 +53,7 @@ def fetch_gleam(args, root, seed, test_fraction, seq_len):
         # remove README file
         os.remove(os.path.join(root, 'README_GLEAM.pdf'))
 
-    def _munge_and_split(root, seed, test_fraction):
+    def _munge_and_split(root, seed, test_size):
         def assign_activity(df, ref_dict):
             for key, value in ref_dict.items():
                 if df.name >= value[0] and df.name <= value[1]:
@@ -151,7 +151,7 @@ def fetch_gleam(args, root, seed, test_fraction, seq_len):
                 raw = pd.concat([pd.get_dummies(raw['Sensor'], drop_first=True, prefix='Sensor', prefix_sep=''), raw.iloc[:, 1:]], axis=1)
 
                 # split into train &  test set
-                train, test = raw.iloc[:-int(len(raw) * test_fraction)], raw.iloc[-int(len(raw) * test_fraction):]
+                train, test = raw.iloc[:-int(len(raw) * test_size)], raw.iloc[-int(len(raw) * test_size):]
                 
                 # split into inputs and targets
                 train_inputs, train_targets = train.iloc[:, :-1].values, train.iloc[:, -1].values
@@ -189,7 +189,7 @@ def fetch_gleam(args, root, seed, test_fraction, seq_len):
         logger.info(f'[LOAD] [GLEAM] ...raw data already exists!')
     
     logger.info(f'[LOAD] [GLEAM] Munging and splitting dataset!')
-    client_datasets = _munge_and_split(os.path.join(root, 'gleam'), seed, test_fraction)
+    client_datasets = _munge_and_split(os.path.join(root, 'gleam'), seed, test_size)
     logger.info('[LOAD] [GLEAM] ...munged and splitted dataset!')
     
     args.in_features = 14

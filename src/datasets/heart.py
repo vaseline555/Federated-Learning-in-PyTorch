@@ -32,7 +32,7 @@ class Heart(torch.utils.data.Dataset):
         return self.identifier
 
 # helper method to fetch Heart disease classification dataset
-def fetch_heart(args, root, seed, test_fraction):
+def fetch_heart(args, root, seed, test_size):
     URL = {
         'cleveland': 'https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.cleveland.data',
         'hungarian': 'https://archive.ics.uci.edu/ml/machine-learning-databases/heart-disease/processed.hungarian.data',
@@ -57,7 +57,7 @@ def fetch_heart(args, root, seed, test_fraction):
             )
             os.rename(os.path.join(root, URL[hospital].split('/')[-1]), os.path.join(root, f'HEART ({hospital}).csv'))
     
-    def _munge_and_split(root, hospital, seed, test_fraction):
+    def _munge_and_split(root, hospital, seed, test_size):
         # load data
         to_drop = [
             10, # the slope of the peak exercise ST segment
@@ -89,7 +89,7 @@ def fetch_heart(args, root, seed, test_fraction):
         inputs, targets = df.iloc[:, :-1].values, df.iloc[:, -1].values
         
         # train-test split with stratified manner
-        train_inputs, test_inputs, train_targets, test_targets = train_test_split(inputs, targets, test_size=test_fraction, random_state=seed, stratify=targets)
+        train_inputs, test_inputs, train_targets, test_targets = train_test_split(inputs, targets, test_size=test_size, random_state=seed, stratify=targets)
         
         # scaling inputs
         scaler = StandardScaler()
@@ -110,7 +110,7 @@ def fetch_heart(args, root, seed, test_fraction):
     logger.info(f'[LOAD] [HEART] Munging and splitting dataset!')
     client_datasets = []
     for hospital in URL.keys():
-        client_datasets.append(_munge_and_split(os.path.join(root, 'heart'), hospital, seed, test_fraction))
+        client_datasets.append(_munge_and_split(os.path.join(root, 'heart'), hospital, seed, test_size))
     logger.info('[LOAD] [HEART] ...munged and splitted dataset!')
     
     args.in_features = 13

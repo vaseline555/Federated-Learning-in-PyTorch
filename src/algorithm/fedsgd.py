@@ -31,6 +31,6 @@ class FedsgdOptimizer(FedavgOptimizer):
         for group in self.param_groups:
             for server_param, (_, local_param) in zip(group['params'], local_param_iterator):
                 if server_param.grad is None:
-                    server_param.grad = local_param.grad.mul(mixing_coefficient)
+                    server_param.grad = local_param.grad.clone().mul(mixing_coefficient)
                 else:
-                    server_param.grad.add_(local_param.grad.mul(mixing_coefficient))
+                    server_param.grad.add_(local_param.grad.clone().mul(mixing_coefficient))

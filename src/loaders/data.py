@@ -69,13 +69,20 @@ def load_dataset(args):
     def _get_transform(args, train=False):
         transform = torchvision.transforms.Compose(
             [
-                torchvision.transforms.Resize((args.resize, args.resize)) if args.resize is not None else torchvision.transforms.Lambda(lambda x: x),
-                torchvision.transforms.RandomRotation(args.randrot) if (args.randrot is not None and train) else torchvision.transforms.Lambda(lambda x: x),
-                torchvision.transforms.RandomHorizontalFlip(args.randhf) if (args.randhf is not None and train) else torchvision.transforms.Lambda(lambda x: x),
-                torchvision.transforms.RandomVerticalFlip(args.randvf) if (args.randvf is not None and train) else torchvision.transforms.Lambda(lambda x: x),
-                torchvision.transforms.ColorJitter(brightness=args.randjit, contrast=args.randjit, saturation=args.randjit, hue=args.randjit) if (args.randjit is not None and train) else torchvision.transforms.Lambda(lambda x: x),
+                torchvision.transforms.RandomCrop(args.crop, pad_if_needed=True) if (args.crop is not None and train)\
+                    else torchvision.transforms.CenterCrop(args.crop) if (args.crop is not None and not train)\
+                        else torchvision.transforms.Lambda(lambda x: x),
+                torchvision.transforms.RandomRotation(args.randrot) if (args.randrot is not None and train)\
+                    else torchvision.transforms.Lambda(lambda x: x),
+                torchvision.transforms.RandomHorizontalFlip(args.randhf) if (args.randhf is not None and train)\
+                    else torchvision.transforms.Lambda(lambda x: x),
+                torchvision.transforms.RandomVerticalFlip(args.randvf) if (args.randvf is not None and train)\
+                    else torchvision.transforms.Lambda(lambda x: x),
+                torchvision.transforms.ColorJitter(brightness=args.randjit, contrast=args.randjit) if (args.randjit is not None and train)\
+                    else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.ToTensor(),
-                torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) if args.imnorm else torchvision.transforms.Lambda(lambda x: x)
+                torchvision.transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) if args.imnorm\
+                    else torchvision.transforms.Lambda(lambda x: x)
             ]
         )
         return transform
@@ -83,7 +90,7 @@ def load_dataset(args):
     # method to construct per-client dataset
     def _construct_dataset(raw_train, idx, sample_indices):
         subset = torch.utils.data.Subset(raw_train, sample_indices)
-        test_size = int(len(subset) * args.test_fraction)
+        test_size = int(len(subset) * args.test_size)
         training_set, test_set = torch.utils.data.random_split(subset, [len(subset) - test_size, test_size])
         traininig_set = SubsetWrapper(training_set, f'< {str(idx).zfill(8)} > (train)')
         test_set = SubsetWrapper(test_set, f'< {str(idx).zfill(8)} > (test)')
@@ -124,9 +131,9 @@ def load_dataset(args):
          
         # define transform
         if args.dataset in ['FEMNIST', 'CelebA']:
-            # check if `resize` is required
-            if args.resize is None:
-                logger.info(f'[LOAD] Dataset `{args.dataset}` may require `resize` argument; (recommended: `FEMNIST` - 28, `CelebA` - 84)!')
+            # check if `crop` is required
+            if args.crop is None:
+                logger.info(f'[LOAD] Dataset `{args.dataset}` may require `crop` argument; (recommended: `FEMNIST` - 28, `CelebA` - 84)!')
             transforms = [_get_transform(args, train=True), _get_transform(args, train=False)]
         elif args.dataset == 'Reddit':
             args.rawsmpl = 1.0
@@ -139,7 +146,7 @@ def load_dataset(args):
             root=args.data_path, 
             seed=args.seed, 
             raw_data_fraction=args.rawsmpl, 
-            test_fraction=args.test_fraction, 
+            test_size=args.test_size, 
             transforms=transforms
         )
 
@@ -180,22 +187,22 @@ def load_dataset(args):
     elif args.dataset == 'Heart':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_heart(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)
+        split_map, client_datasets, args = fetch_heart(args=args, root=args.data_path, seed=args.seed, test_size=args.test_size)
     
     elif args.dataset == 'Adult':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_adult(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)
+        split_map, client_datasets, args = fetch_adult(args=args, root=args.data_path, seed=args.seed, test_size=args.test_size)
     
     elif args.dataset == 'Cover':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction)  
+        split_map, client_datasets, args = fetch_cover(args=args, root=args.data_path, seed=args.seed, test_size=args.test_size)  
     
     elif args.dataset == 'GLEAM':
         _check_and_raise_error(args.split_type, 'pre', 'split scenario', False)
         _check_and_raise_error(args.eval_type, 'local', 'evaluation type', False)
-        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_fraction=args.test_fraction, seq_len=args.seq_len)
+        split_map, client_datasets, args = fetch_gleam(args=args, root=args.data_path, seed=args.seed, test_size=args.test_size, seq_len=args.seq_len)
 
     else: # x) for a dataset with no support yet or incorrectly entered...
         err = f'[LOAD] Dataset `{args.dataset}` is not supported or seems incorrectly entered... please check!'
@@ -206,13 +213,20 @@ def load_dataset(args):
     ############
     # finalize #
     ############
-    # adjust the number of classes in binary case
+    # adjust the number of classes in a binary classification task
     if args.num_classes == 2:
         args.num_classes = 1
         args.criterion = 'BCEWithLogitsLoss'
         
     # check if global holdout set is required or not
     if args.eval_type == 'local':
+        if raw_test is not None:
+            ## when if assigning pre-defined test split as a local holdout set
+            if args.test_size == -1: 
+                args.test_size = len(raw_test) / (len(raw_train) + len(raw_test))
+
+            ## merge raw training and raw test set into raw training set (as no central holdout set required in this setting)
+            raw_train = torch.utils.data.ConcatDataset([raw_train, raw_test])
         raw_test = None
     else:
         if raw_test is None:

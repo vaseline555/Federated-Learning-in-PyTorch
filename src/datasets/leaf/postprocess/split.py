@@ -8,7 +8,7 @@ from collections import OrderedDict
 
 
 
-def split_datasets(dataset_name, root, seed, test_fraction):
+def split_datasets(dataset_name, root, seed, test_size):
     # set path
     data_dir = os.path.join(root, dataset_name)
     subdir = os.path.join(data_dir, 'rem_clients_data')
@@ -48,7 +48,7 @@ def split_datasets(dataset_name, root, seed, test_fraction):
             curr_num_samples = len(data['user_data'][u]['y'])
             if curr_num_samples >= 2:
                 # ensures number of train and test samples both >= 1
-                num_train_samples = max(1, int((1. - test_fraction) * curr_num_samples))
+                num_train_samples = max(1, int((1. - test_size) * curr_num_samples))
                 if curr_num_samples == 2:
                     num_train_samples = 1
                 num_test_samples = curr_num_samples - num_train_samples
@@ -90,7 +90,7 @@ def split_datasets(dataset_name, root, seed, test_fraction):
         all_data_train['user_data'] = user_data_train
     
         # save file of training set
-        with open(os.path.join(data_dir, 'train', f'{f[:-5]}_train_0{str(1. - test_fraction)[2:]}.json'), 'w') as outfile:
+        with open(os.path.join(data_dir, 'train', f'{f[:-5]}_train_0{str(1. - test_size)[2:]}.json'), 'w') as outfile:
             json.dump(all_data_train, outfile)
         
         # create json file of test set
@@ -100,5 +100,5 @@ def split_datasets(dataset_name, root, seed, test_fraction):
         all_data_test['user_data'] = user_data_test
         
         # save file of test set
-        with open(os.path.join(data_dir, 'test', f'{f[:-5]}_test_0{str(test_fraction)[2:]}.json'), 'w') as outfile:
+        with open(os.path.join(data_dir, 'test', f'{f[:-5]}_test_0{str(test_size)[2:]}.json'), 'w') as outfile:
             json.dump(all_data_test, outfile)

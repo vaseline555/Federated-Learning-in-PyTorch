@@ -75,9 +75,9 @@ class TensorboardServer(Process):
 
     def run(self):
         if self.os_name == 'nt':  # Windows
-            os.system(f'{sys.executable} -m tensorboard.main --logdir "{self.path}" --host {self.host} --port {self.port} 2> NUL')
+            os.system(f'{sys.executable} -m tensorboard.main --logdir "{self.path}" --host {self.host} --reuse_port=true --port {self.port} 2> NUL')
         elif self.os_name == 'posix':  # Linux
-            os.system(f'{sys.executable} -m tensorboard.main --logdir "{self.path}" --host {self.host} --port {self.port} >/dev/null 2>&1')
+            os.system(f'{sys.executable} -m tensorboard.main --logdir "{self.path}" --host {self.host} --reuse_port=true --port {self.port} >/dev/null 2>&1')
         else:
             err = f'Current OS ({self.os_name}) is not supported!'
             logger.exception(err)
@@ -136,15 +136,17 @@ def init_weights(model, init_type, init_gain):
                 torch.nn.init.normal_(m.weight.data, mean=1.0, std=init_gain)
             if hasattr(m, 'bias') and m.bias is not None:
                 torch.nn.init.constant_(m.bias.data, 0.0)
-        elif hasattr(m, 'weight') and (classname.find('Conv') != -1 or classname.find('Linear') != -1):
+        elif hasattr(m, 'weight'):
             if init_type == 'normal':
-                torch.nn.init.normal_(m.weight.data, mean=0.0, std=init_gain)
+                torch.nn.init.normal_(m.weight.data, mean=0., std=init_gain)
             elif init_type == 'xavier':
                 torch.nn.init.xavier_normal_(m.weight.data, gain=init_gain)
             elif init_type == 'xavier_uniform':
                 torch.nn.init.xavier_uniform_(m.weight.data, gain=1.0)
             elif init_type == 'kaiming':
                 torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
+            elif init_type == 'truncnorm':
+                torch.nn.init.trunc_normal_(m.weight.data, mean=0., std=init_gain)
             elif init_type == 'orthogonal':
                 torch.nn.init.orthogonal_(m.weight.data, gain=init_gain)
             elif init_type == 'none':  # uses pytorch's default init method
@@ -175,15 +177,23 @@ def check_args(args):
     if args.algorithm == 'fedsgd':
         args.E = 1
         args.B = 0
-
+    elif args.algorithm == 'fedavgm':
+        if args.beta <= 0:
+            err = f'server momentum factor (i.e., `beta`) should be positive... please check!'
+            logger.exception(err)
+            raise AssertionError(err)
+    
+    if args.beta > 0:
+        args.algorithm = 'fedavgm'
+        
     # check lr step
-    if args.lr_decay_step >= args.R:
+    if args.lr_decay_step > args.R:
         err = f'step size for learning rate decay (`{args.lr_decay_step}`) should be smaller than total round (`{args.R}`)... please check!'
         logger.exception(err)
         raise AssertionError(err)
 
     # check train only mode
-    if args.test_fraction == 0:
+    if args.test_size == 0:
         args._train_only = True
     else:
         args._train_only = False
@@ -222,19 +232,19 @@ def check_args(args):
 #####################
 # BCEWithLogitsLoss #
 #####################
-class NoPainBCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
+class PainlessBCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
     """Native `torch.nn.BCEWithLogitsLoss` requires squeezed logits shape and targets with float dtype.
     """
     def __init__(self, **kwargs):
-        super(NoPainBCEWithLogitsLoss, self).__init__(**kwargs)
+        super(PainlessBCEWithLogitsLoss, self).__init__(**kwargs)
 
     def forward(self, inputs, targets):
-        return super(NoPainBCEWithLogitsLoss, self).forward(
+        return super(PainlessBCEWithLogitsLoss, self).forward(
             torch.atleast_1d(inputs.squeeze()), 
             torch.atleast_1d(targets).float()
         )
 
-torch.nn.BCEWithLogitsLoss = NoPainBCEWithLogitsLoss
+torch.nn.BCEWithLogitsLoss = PainlessBCEWithLogitsLoss
 
 ################
 # Seq2Seq Loss #
@@ -264,6 +274,12 @@ class MetricManager:
             }
         self.figures = defaultdict(int) 
         self._results = dict()
+
+        # use optimal threshold (i.e., Youden's J or not)
+        if 'youdenj' in self.metric_funcs:
+            for func in self.metric_funcs.values():
+                if hasattr(func, _use_youdenj):
+                    setattr(func, _use_youdenj, True)
 
     def track(self, loss, pred, true):
         # update running loss

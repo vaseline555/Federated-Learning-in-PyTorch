@@ -9,11 +9,11 @@ class MobileViT(torch.nn.Module):
     DIMS = [64, 80, 96]
     CHANNELS = [16, 16, 24, 24, 48, 48, 64, 64, 80, 80, 320]
     
-    def __init__(self, resize, in_channels, num_classes, dropout):
+    def __init__(self, crop, in_channels, num_classes, dropout):
         super(MobileViT, self).__init__()
-        assert (resize is not None) and (resize >= 128) and (resize % 2 == 0)
+        assert (crop is not None) and (crop >= 128) and (crop % 2 == 0)
         
-        self.size = resize
+        self.size = crop
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.dropout = dropout
