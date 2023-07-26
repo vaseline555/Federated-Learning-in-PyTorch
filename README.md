@@ -20,7 +20,7 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * `Pre-defined` (for datasets having natural semantic separation, including `LEAF` benchmark ([Caldas et al., 2018](https://arxiv.org/abs/1812.01097)))
 ### Models
 * `LogReg` (logistic regression), `GRUClassifier` (GRU-cell based classifier)
-* `TwoNN`, `TwoCNN`, `NextCharLSTM`, `NextWordLSTM` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
+* `TwoNN`, `TwoCNN`, `SimpleCNN`, `NextCharLSTM`, `NextWordLSTM` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
 * `LeNet` ([LeCun et al., 1998](https://ieeexplore.ieee.org/document/726791/)), `MobileNet` ([Howard et al., 2019](https://arxiv.org/abs/1905.02244)), `SqueezeNet` ([Iandola et al., 2016](https://arxiv.org/abs/1602.07360)), `VGG` ([Simonyan et al., 2014](https://arxiv.org/abs/1409.1556)), `ResNet` ([He et al., 2015](https://arxiv.org/abs/1512.03385))
 * `MobileNeXt` ([Daquan et al., 2020](https://arxiv.org/abs/2007.02269)), `SqueezeNeXt` ([Gholami et al., 2016](https://arxiv.org/abs/1803.10615)), `MobileViT` ([Mehta et al., 2021](https://arxiv.org/abs/2110.02178))
 * `DistilBERT` ([Sanh et al., 2019](https://arxiv.org/abs/1910.01108)), `SqueezeBERT` ([Iandola et al., 2020](https://arxiv.org/abs/2006.11316)), `MobileBERT` ([Sun et al., 2020](https://arxiv.org/abs/2004.02984))
