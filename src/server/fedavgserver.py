@@ -278,53 +278,43 @@ class FedavgServer(BaseServer):
     def update(self):
         """Update the global model through federated learning.
         """
-        ###########################
-        # => connected to clients #
-        ###########################
-        # randomly select clients
-        selected_ids = self._sample_clients()
+        #################
+        # Client Update #
+        #################
+        selected_ids = self._sample_clients() # randomly select clients
+        self._broadcast_models(selected_ids) # broadcast the current model at the server to selected clients
+        updated_sizes = self._request(selected_ids, eval=False) # request update to selected clients
+        self._request(selected_ids, eval=True, participated=True) # request evaluation to selected clients
 
-        # broadcast the current model at the server to selected clients
-        self._broadcast_models(selected_ids)
-        
-        # request update to selected clients
-        updated_sizes = self._request(selected_ids, eval=False)
-
-        # request evaluation to selected clients
-        self._request(selected_ids, eval=True, participated=True)
-
-        # receive updates and aggregate into a new weights
+        ####################
+        # Server Aggregate #
+        ####################
         self.server_optimizer.zero_grad() # empty out buffer
         self._aggregate(selected_ids, updated_sizes) # aggregate local updates
-        self.server_optimizer.step() # update global model with theaggregated update
-        if self.round % self.args.lr_decay_step == 0:
-            self.lr_scheduler.step() # update learning rate
-
-        # remove model copy in clients
-        self._cleanup(selected_ids)
+        self.server_optimizer.step() # update global model with by the aggregated update
+        if self.round % self.args.lr_decay_step == 0: # update learning rate
+            self.lr_scheduler.step() 
+        self._cleanup(selected_ids) # remove model copy in clients
         return selected_ids
 
     def evaluate(self, excluded_ids):
         """Evaluate the global model located at the server.
         """
-        # randomly select all remaining clients not participated in current round
-        selected_ids = self._sample_clients(exclude=excluded_ids)
-        self._broadcast_models(selected_ids)
-
-        # request evaluation 
-        ## `local`: evaluate on selected clients' holdout set
-        ## `global`: evaluate on the server's global holdout set 
-        ## `both`: conduct both `local` and `global` evaluations
-        if self.args.eval_type == 'local':
+        ##############
+        # Evaluation #
+        ##############
+        if self.args.eval_type == 'local': # `local`: evaluate on selected clients' holdout set
+            selected_ids = self._sample_clients(exclude=excluded_ids)
+            self._broadcast_models(selected_ids)
             self._request(selected_ids, eval=True, participated=False)
-        elif self.args.eval_type == 'global':
+        elif self.args.eval_type == 'global': # `global`: evaluate on the server's global holdout set 
             self._central_evaluate()
-        elif self.args.eval_type == 'both':
+        elif self.args.eval_type == 'both': # `both`: conduct both `local` and `global` evaluations
+            selected_ids = self._sample_clients(exclude=excluded_ids)
+            self._broadcast_models(selected_ids)
             self._request(selected_ids, eval=True, participated=False)
             self._central_evaluate()
-
-        # remove model copy in clients
-        self._cleanup(selected_ids)
+        self._cleanup(selected_ids) # remove model copy in clients
 
         # calculate generalization gap
         if (not self.args._train_only) and (not self.args.eval_type == 'global'):
@@ -344,14 +334,10 @@ class FedavgServer(BaseServer):
         """Save results.
         """
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Save results and the global model checkpoint!')
-        # save figure
-        with open(os.path.join(self.args.result_path, f'{self.args.exp_name}.json'), 'w', encoding='utf8') as result_file:
+        with open(os.path.join(self.args.result_path, f'{self.args.exp_name}.json'), 'w', encoding='utf8') as result_file: # save results
             results = {key: value for key, value in self.results.items()}
             json.dump(results, result_file, indent=4)
-
-        # save checkpoint
-        torch.save(self.global_model.state_dict(), os.path.join(self.args.result_path, f'{self.args.exp_name}.pt'))
-        
+        torch.save(self.global_model.state_dict(), os.path.join(self.args.result_path, f'{self.args.exp_name}.pt')) # save model checkpoint
         self.writer.close()
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...finished federated learning!')
         if self.args.use_tb:
