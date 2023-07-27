@@ -202,6 +202,7 @@ if __name__ == "__main__":
     writer = SummaryWriter(log_dir=os.path.join(args.log_path, f'{args.exp_name}_{curr_time}'), filename_suffix=f'_{curr_time}')
 
     # run main program
+    torch.autograd.set_detect_anomaly(True)
     try:
         main(args, writer)
         if args.use_tb:

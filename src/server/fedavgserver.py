@@ -300,21 +300,16 @@ class FedavgServer(BaseServer):
     def evaluate(self, excluded_ids):
         """Evaluate the global model located at the server.
         """
-        ##############
-        # Evaluation #
-        ##############
-        if self.args.eval_type == 'local': # `local`: evaluate on selected clients' holdout set
+        ############
+        # Evaluate #
+        ############
+        if self.args.eval_type != 'global': # `local` or `both`: evaluate on selected clients' holdout set
             selected_ids = self._sample_clients(exclude=excluded_ids)
             self._broadcast_models(selected_ids)
             self._request(selected_ids, eval=True, participated=False)
-        elif self.args.eval_type == 'global': # `global`: evaluate on the server's global holdout set 
+            self._cleanup(selected_ids) # remove model copy in clients
+        if self.args.eval_type != 'local': # `global` or `both`: evaluate on the server's global holdout set 
             self._central_evaluate()
-        elif self.args.eval_type == 'both': # `both`: conduct both `local` and `global` evaluations
-            selected_ids = self._sample_clients(exclude=excluded_ids)
-            self._broadcast_models(selected_ids)
-            self._request(selected_ids, eval=True, participated=False)
-            self._central_evaluate()
-        self._cleanup(selected_ids) # remove model copy in clients
 
         # calculate generalization gap
         if (not self.args._train_only) and (not self.args.eval_type == 'global'):

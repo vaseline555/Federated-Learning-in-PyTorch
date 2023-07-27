@@ -8,7 +8,6 @@ class TwoCNN(torch.nn.Module): # McMahan et al., 2016; 1,663,370 parameters
         self.in_channels = in_channels
         self.hidden_channels = hidden_size
         self.num_classes = num_classes
-        self.activation = torch.nn.ReLU(True)
         
         self.features = torch.nn.Sequential(
             torch.nn.Conv2d(in_channels=self.in_channels, out_channels=self.hidden_channels, kernel_size=(5, 5), padding=1, stride=1, bias=True),

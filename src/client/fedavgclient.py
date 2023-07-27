@@ -43,7 +43,7 @@ class FedavgClient(BaseClient):
         for e in range(self.args.E):
             for inputs, targets in self.train_loader:
                 inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
- 
+
                 outputs = self.model(inputs)
                 loss = self.criterion()(outputs, targets)
 

@@ -35,7 +35,9 @@ class FedavgOptimizer(BaseOptimizer, torch.optim.Optimizer):
             for server_param, (name, local_param) in zip(group['params'], local_param_iterator):
                 if partial_agg_condition(name):
                     continue
+                local_delta = (server_param.data - local_param.data).mul(mixing_coefficient)
                 if server_param.grad is None: # NOTE: grad buffer is used to accumulate local updates!
-                    server_param.grad = (server_param.data.clone() - local_param.data.clone()).mul(mixing_coefficient)
+                    server_param.grad = local_delta
                 else:
-                    server_param.grad.add_(server_param.data.clone() - local_param.data.clone()).mul(mixing_coefficient)
+                    server_param.grad.add_(local_delta)
+                
