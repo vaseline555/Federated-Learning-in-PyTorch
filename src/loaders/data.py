@@ -69,6 +69,8 @@ def load_dataset(args):
     def _get_transform(args, train=False):
         transform = torchvision.transforms.Compose(
             [
+                torchvision.transforms.Resize(args.resize) if args.resize is not None\
+                    else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.RandomCrop(args.crop, pad_if_needed=True) if (args.crop is not None and train)\
                     else torchvision.transforms.CenterCrop(args.crop) if (args.crop is not None and not train)\
                         else torchvision.transforms.Lambda(lambda x: x),
