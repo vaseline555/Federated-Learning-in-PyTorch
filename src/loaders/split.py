@@ -183,5 +183,5 @@ def simulate_split(args, dataset):
         split_map = {k: assigned_indices[k] for k in range(args.K)}
         return split_map
     # `leaf` - LEAF benchmark (Caldas et al., 2018); `fedvis` - Federated Vision Datasets (Hsu, Qi and Brown, 2020)
-    elif args.split_type in ['leaf', 'fedvis']: 
+    elif args.split_type in ['leaf']: 
         logger.info('[SIMULATE] Use pre-defined split!')

@@ -2,7 +2,7 @@ import torch
 
 
 
-class SimpleCNN(torch.nn.Module): # for CIFAR10 experiment in McMahan et al., 2016; (https://github.com/tensorflow/tensorflow/blob/34afdbbcf35309416568dd96422c45aaefdf0f84/tensorflow/models/image/cifar10/cifar10.py)
+class SimpleCNN(torch.nn.Module): # for CIFAR10 experiment in McMahan et al., 2016; (https://github.com/tensorflow/tensorflow/blob/r0.11/tensorflow/models/image/cifar10/cifar10.py)
     def __init__(self, in_channels, hidden_size, num_classes):
         super(SimpleCNN, self).__init__()
         self.in_channels = in_channels
@@ -13,10 +13,10 @@ class SimpleCNN(torch.nn.Module): # for CIFAR10 experiment in McMahan et al., 20
             torch.nn.Conv2d(in_channels=self.in_channels, out_channels=self.hidden_channels, kernel_size=5, padding=2, stride=1, bias=True),
             torch.nn.ReLU(),
             torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-            torch.nn.LocalResponseNorm(size=8, alpha=0.001),
+            torch.nn.LocalResponseNorm(size=9, alpha=0.001),
             torch.nn.Conv2d(in_channels=self.hidden_channels, out_channels=self.hidden_channels, kernel_size=5, padding=2, stride=1, bias=True),
             torch.nn.ReLU(),
-            torch.nn.LocalResponseNorm(size=8, alpha=0.001),
+            torch.nn.LocalResponseNorm(size=9, alpha=0.001),
             torch.nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
         )
         self.classifier = torch.nn.Sequential(

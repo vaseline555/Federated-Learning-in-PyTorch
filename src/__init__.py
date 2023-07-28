@@ -36,6 +36,6 @@ def set_logger(path, args):
         |      |______ |_____| |_____/ | \  |   |   | \  | |  ____        
         |_____ |______ |     | |    \_ |  \_| __|__ |  \_| |_____|        
                                                                     
-                        By. vaseline555 (Seok-Ju Hahn)
+                        By. vaseline555 (Adam)
     """
     logger.info(welcome_message)

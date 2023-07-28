@@ -62,10 +62,6 @@ class BaseServer(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def _cleanup(self, indices):
-        raise NotImplementedError
-
-    @abstractmethod
     def _central_evaluate(self):
         raise NotImplementedError
         

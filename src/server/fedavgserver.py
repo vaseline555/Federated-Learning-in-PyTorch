@@ -166,7 +166,10 @@ class FedavgServer(BaseServer):
             return {client.id: len(client.training_set)}, {client.id: update_result}
 
         def __evaluate_clients(client):
+            if client.model is None:
+                client.download(self.global_model)
             eval_result = client.evaluate() 
+            client.model = None
             return {client.id: len(client.test_set)}, {client.id: eval_result}
 
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Request {"updates" if not eval else "evaluation"} to {"all" if ids is None else len(ids)} clients!')
@@ -225,19 +228,6 @@ class FedavgServer(BaseServer):
             self.server_optimizer.accumulate(coefficients[identifier], locally_updated_weights_iterator)
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully aggregated into a new gloal model!')
 
-    def _cleanup(self, indices):
-        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Clean up!')
-
-        for identifier in indices:
-            if self.clients[identifier].model is not None:
-                self.clients[identifier].model = None
-            else:
-                err = f'why clients ({identifier}) has no model? please check!'
-                logger.exception(err)
-                raise AssertionError(err)
-        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully cleaned up!')
-        gc.collect()
-
     @torch.inference_mode()
     def _central_evaluate(self):
         mm = MetricManager(self.args.eval_metrics)
@@ -284,30 +274,28 @@ class FedavgServer(BaseServer):
         selected_ids = self._sample_clients() # randomly select clients
         self._broadcast_models(selected_ids) # broadcast the current model at the server to selected clients
         updated_sizes = self._request(selected_ids, eval=False) # request update to selected clients
-        self._request(selected_ids, eval=True, participated=True) # request evaluation to selected clients
-
-        ####################
-        # Server Aggregate #
-        ####################
+    
+        #################
+        # Server Update #
+        #################
         self.server_optimizer.zero_grad() # empty out buffer
         self._aggregate(selected_ids, updated_sizes) # aggregate local updates
         self.server_optimizer.step() # update global model with by the aggregated update
-        if self.round % self.args.lr_decay_step == 0: # update learning rate
-            self.lr_scheduler.step() 
-        self._cleanup(selected_ids) # remove model copy in clients
+        if self.round % self.args.lr_decay_step == 0: # update local learning rate
+            self.lr_scheduler.step()
+        self._request(selected_ids, eval=True, participated=True) # request evaluation to selected clients 
+        # (this is located at last INTENTIONALLY to free out model pointer without problem)
         return selected_ids
 
     def evaluate(self, excluded_ids):
         """Evaluate the global model located at the server.
         """
-        ############
-        # Evaluate #
-        ############
+        ##############
+        # Evaluation #
+        ##############
         if self.args.eval_type != 'global': # `local` or `both`: evaluate on selected clients' holdout set
             selected_ids = self._sample_clients(exclude=excluded_ids)
-            self._broadcast_models(selected_ids)
             self._request(selected_ids, eval=True, participated=False)
-            self._cleanup(selected_ids) # remove model copy in clients
         if self.args.eval_type != 'local': # `global` or `both`: evaluate on the server's global holdout set 
             self._central_evaluate()
 

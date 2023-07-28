@@ -93,7 +93,10 @@ def load_dataset(args):
         test_size = int(len(subset) * args.test_size)
         training_set, test_set = torch.utils.data.random_split(subset, [len(subset) - test_size, test_size])
         traininig_set = SubsetWrapper(training_set, f'< {str(idx).zfill(8)} > (train)')
-        test_set = SubsetWrapper(test_set, f'< {str(idx).zfill(8)} > (test)')
+        if test_size > 0:
+            test_set = SubsetWrapper(test_set, f'< {str(idx).zfill(8)} > (test)')
+        else:
+            test_set = None
         return (traininig_set, test_set)
     
     #################
@@ -220,13 +223,9 @@ def load_dataset(args):
         
     # check if global holdout set is required or not
     if args.eval_type == 'local':
-        if raw_test is not None:
-            ## when if assigning pre-defined test split as a local holdout set
-            if args.test_size == -1: 
-                args.test_size = len(raw_test) / (len(raw_train) + len(raw_test))
-
-            ## merge raw training and raw test set into raw training set (as no central holdout set required in this setting)
-            raw_train = torch.utils.data.ConcatDataset([raw_train, raw_test])
+        if args.test_size == -1: 
+            assert raw_test is not None
+            _raw_test = raw_test
         raw_test = None
     else:
         if raw_test is None:
@@ -253,5 +252,14 @@ def load_dataset(args):
                 ):
                 client_datasets.append(workhorse.submit(_construct_dataset, raw_train, idx, sample_indices).result()) 
         logger.info(f'[SIMULATE] ...successfully created client datasets!')
+        
+        ## when if assigning pre-defined test split as a local holdout set (just divided by the total number of clients)
+        if (args.eval_type == 'local') and (args.test_size == -1):  
+            holdout_sets = torch.utils.data.random_split(_raw_test, [int(len(_raw_test) / args.K)  for _ in range(args.K)])
+            holdout_sets = [SubsetWrapper(holdout_set, f'< {str(idx).zfill(8)} > (test)') for idx, holdout_set in enumerate(holdout_sets)]
+            augmented_datasets = []
+            for idx, client_dataset in enumerate(client_datasets): 
+                augmented_datasets.append((client_dataset[0], holdout_sets[idx]))
+            client_datasets = augmented_datasets
     gc.collect()
     return raw_test, client_datasets    
