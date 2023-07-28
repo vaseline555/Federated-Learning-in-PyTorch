@@ -16,3 +16,4 @@ from .squeezebert import SqueezeBert
 from .logreg import LogReg
 from .gruclassifier import GRUClassifier
 from .simplecnn import SimpleCNN
+from .femnistcnn import FEMNISTCNN

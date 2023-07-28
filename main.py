@@ -116,7 +116,7 @@ if __name__ == "__main__":
     ## model
     parser.add_argument('--model_name', help='a model to be used (NOTE: case sensitive)', type=str,
         choices=[
-            'TwoNN', 'TwoCNN', 'SimpleCNN',
+            'TwoNN', 'TwoCNN', 'SimpleCNN', 'FEMNISTCNN',
             'LeNet', 'MobileNet', 'SqueezeNet',
             'VGG9', 'VGG9BN', 'VGG11', 'VGG11BN', 'VGG13', 'VGG13BN',
             'ResNet10', 'ResNet18', 'ResNet34',
