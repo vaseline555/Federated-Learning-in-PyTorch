@@ -135,8 +135,8 @@ if __name__ == "__main__":
     parser.add_argument('--num_layers', help='number of layers in recurrent cells', type=int, default=2)
     parser.add_argument('--num_embeddings', help='size of an embedding layer', type=int, default=1000)
     parser.add_argument('--embedding_size', help='output dimension of an embedding layer', type=int, default=512)
-    parser.add_argument('--init_type', help='weight initialization method', type=str, default='none', choices=['normal', 'xavier', 'xavier_uniform', 'kaiming', 'orthogonal', 'truncnorm', 'none'])
-    parser.add_argument('--init_gain', type=float, default=0.05, help='magnitude of variance used for weight initialization')
+    parser.add_argument('--init_type', help='weight initialization method', type=str, default='xavier', choices=['normal', 'xavier', 'xavier_uniform', 'kaiming', 'orthogonal', 'truncnorm', 'none'])
+    parser.add_argument('--init_gain', type=float, default=1.0, help='magnitude of variance used for weight initialization')
     
     ######################
     # Learning arguments #

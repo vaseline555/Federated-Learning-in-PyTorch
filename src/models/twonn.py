@@ -3,9 +3,9 @@ import torch
 
 
 class TwoNN(torch.nn.Module): # McMahan et al., 2016; 199,210 parameters
-    def __init__(self, crop, hidden_size, num_classes):
+    def __init__(self, resize, hidden_size, num_classes):
         super(TwoNN, self).__init__()
-        self.in_features = crop**2
+        self.in_features = resize**2
         self.num_hiddens = hidden_size
         self.num_classes = num_classes
         

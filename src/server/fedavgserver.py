@@ -127,30 +127,30 @@ class FedavgServer(BaseServer):
         else:
             num_samples = np.array(num_samples).astype(float)
 
-        # aggregate intototal logs
+        # aggregate into total logs
         result_dict = defaultdict(dict)
         total_log_string = f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDATE"}] [SUMMARY] ({len(resulting_sizes)} clients):'
 
         # loss
         losses = np.array(losses).astype(float)
-        weighted = losses.dot(num_samples) / sum(num_samples); equal = losses.mean(); std = losses.std(); top = losses.max()
-        total_log_string += f'\n    - Loss: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Top. ({top:.4f}) |'
-        result_dict['loss'] = {'weighted': weighted, 'equal': equal, 'std': std, 'top': top}
+        weighted = losses.dot(num_samples) / sum(num_samples); equal = losses.mean(); std = losses.std(); top10p = np.percentile(losses, 90)
+        total_log_string += f'\n    - Loss: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Top 10% ({top10p:.4f})'
+        result_dict['loss'] = {'weighted': weighted, 'equal': equal, 'std': std, 'top10%': top10p}
         self.writer.add_scalars(
             f'Local {"Test" if eval else "Training"} Loss ' + eval * f'({"In" if participated else "Out"})',
-            {'Weighted Average': weighted, 'Equal Average': equal, 'Std.': std, 'Top': top},
+            {'Weighted Average': weighted, 'Equal Average': equal, 'Std.': std, 'Top 10%': top10p},
             self.round
         )
 
         # metrics
         for name, val in metrics.items():
             val = np.array(val).astype(float)
-            weighted = val.dot(num_samples) / sum(num_samples); equal = val.mean(); std = val.std(); bot = val.min()
-            total_log_string += f'\n    - {name.title()}: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Bottom. ({bot:.4f})'
-            result_dict[name] = {'weighted': weighted, 'equal': equal, 'std': std, 'bottom': bot}
+            weighted = val.dot(num_samples) / sum(num_samples); equal = val.mean(); std = val.std(); bot10p = np.percentile(val, 10)
+            total_log_string += f'\n    - {name.title()}: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Bottom 10% ({bot10p:.4f})'
+            result_dict[name] = {'weighted': weighted, 'equal': equal, 'std': std, 'bottom10%': bot10p}
             self.writer.add_scalars(
                 f'Local {"Test" if eval else "Training"} {name.title()}' + eval * f' ({"In" if participated else "Out"})',
-                {'Weighted Average': weighted, 'Equal Average': equal, 'Std.': std, 'Bottom': bot},
+                {'Weighted Average': weighted, 'Equal Average': equal, 'Std.': std, 'Bottom 10%': bot10p},
                 self.round
             )
             self.writer.flush()
