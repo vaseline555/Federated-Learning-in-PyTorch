@@ -70,7 +70,7 @@ class Shakespeare(LEAFDataset):
         self.num_classes =  num_classes
 
     def make_dataset(self):
-        self.inputs, self.targets = torch.tensor(self.data['x']).long(), torch.tensor(self.data['y']).long()
+        self.inputs, self.targets = torch.tensor(self.data['x']), torch.tensor(self.data['y'])
         self.num_samples = len(self.inputs)
 
     def __getitem__(self, index):

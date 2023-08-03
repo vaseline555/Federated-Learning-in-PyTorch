@@ -150,8 +150,7 @@ def preprocess(root):
         """Create meta-data of Shakespeare dataset.
 
         Args:
-            data_path: path of raw data
-            users_and_plays_path: path of `users_and_plays.json` 
+            path: path of raw data
 
         Returns:
             all_data: dictionary with keys - (users, num_samples, user_data)

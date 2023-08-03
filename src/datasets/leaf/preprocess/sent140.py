@@ -24,7 +24,18 @@ def preprocess(root):
         # process embeddings
         lines = [l.split() for l in lines]
         vocab = [l[0] for l in lines]
-        return vocab
+
+        # get word indices
+        vocab_indices = {w: i + 1 for i, w in enumerate(vocab)} # + 1 for padding token
+
+        # get index:embedding map
+        embs = [[float(n) for n in l[1:]] for l in lines]
+        embs.insert(0, [0. for _ in range(300)]) # for padding token
+
+        # save into file
+        with open(os.path.join(path, 'vocab', 'glove.6B.300d.json'), 'w') as file:
+            json.dump(embs, file)
+        return vocab_indices
     
     def _combine_data(path):
         raw_train = pd.read_csv(
@@ -46,16 +57,7 @@ def preprocess(root):
         raw_all = pd.concat([raw_train, raw_test]).sort_index(kind='mergesort')
         return raw_all
         
-    def _convert_to_json(path, raw_all, vocab):
-        def _get_words_indices(vocab):
-            """Get word indices using pre-defined GloVe. 
-            """
-            indices = {}
-            for i in range(len(vocab)):
-                indices[vocab[i]] = i
-            vocab = {w: i for i, w in enumerate(vocab)}
-            return indices
-        
+    def _convert_to_json(path, raw_all, indices):       
         def _split_line(line):
             """Split given line/phrase into list of words
             """
@@ -84,9 +86,6 @@ def preprocess(root):
             indices = [word2id[w] if w in word2id else pad_id for w in line_list[:max_words]]
             indices += [pad_id] * (max_words - len(indices))
             return indices
-
-        # get index dictionry of each word
-        indices = _get_words_indices(vocab)
 
         # convert user ID into digits
         user_id_map = {str_id: int_id for int_id, str_id in enumerate(raw_all.index.unique().tolist())}
@@ -131,7 +130,7 @@ def preprocess(root):
     
     # get GloVe vocabulary
     logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] Process GloVe embeddings (300 dim.)...!')
-    glove_vocab = _get_glove_vocab(path)
+    glove_vocab_indices = _get_glove_vocab(path)
     logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] ...finished processing GloVe embeddings!')
     
     # combine raw data
@@ -141,5 +140,5 @@ def preprocess(root):
     
     # convert to json format 
     logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] Convert data to json format... (this may take several minutes)!')
-    _convert_to_json(path, raw_all, glove_vocab)
+    _convert_to_json(path, raw_all, glove_vocab_indices)
     logger.info(f'[LOAD] [LEAF - {DATASET_NAME.upper()}] ...finished converting data to json format!')

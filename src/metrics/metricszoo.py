@@ -40,7 +40,6 @@ class Acc1(BaseMetric):
             labels = np.where(scores >= cutoff, 1, 0)
         return accuracy_score(answers, labels)
 
-
 class Acc5(BaseMetric):
     def __init__(self):
         self.scores = []

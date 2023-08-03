@@ -226,6 +226,7 @@ class FedavgServer(BaseServer):
         for identifier in ids:
             locally_updated_weights_iterator = self.clients[identifier].upload()
             self.server_optimizer.accumulate(coefficients[identifier], locally_updated_weights_iterator)
+            self.clients[identifier].model = None
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully aggregated into a new gloal model!')
 
     @torch.inference_mode()

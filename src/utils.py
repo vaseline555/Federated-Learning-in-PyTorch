@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 import torch
 import random
 import logging
@@ -142,7 +143,7 @@ def init_weights(model, init_type, init_gain):
             elif init_type == 'xavier':
                 torch.nn.init.xavier_normal_(m.weight.data, gain=init_gain)
             elif init_type == 'xavier_uniform':
-                torch.nn.init.xavier_uniform_(m.weight.data, gain=1.0)
+                torch.nn.init.xavier_uniform_(m.weight.data, gain=init_gain)
             elif init_type == 'kaiming':
                 torch.nn.init.kaiming_normal_(m.weight.data, a=0, mode='fan_in')
             elif init_type == 'truncnorm':
@@ -161,6 +162,10 @@ def init_weights(model, init_type, init_gain):
 # Arguments checker #
 #####################
 def check_args(args):
+    # check device
+    if 'cuda' in args.device:
+        assert torch.cuda.is_available(), 'Please check if your GPU is available now!' 
+
     # check optimizer
     if args.optimizer not in torch.optim.__dict__.keys():
         err = f'`{args.optimizer}` is not a submodule of `torch.optim`... please check!'
@@ -182,10 +187,17 @@ def check_args(args):
             err = f'server momentum factor (i.e., `beta`) should be positive... please check!'
             logger.exception(err)
             raise AssertionError(err)
-    
     if args.beta > 0:
         args.algorithm = 'fedavgm'
-        
+    
+    # check model
+    if args.model_name == 'Sent140LSTM':
+        with open(os.path.join(args.data_path, 'sent140', 'vocab', 'glove.6B.300d.json'), 'r') as file:
+            emb_weights = torch.tensor(json.load(file))
+        args.glove_emb = emb_weights
+    else:
+        args.glove_emb = False
+
     # check lr step
     if args.lr_decay_step > args.R:
         err = f'step size for learning rate decay (`{args.lr_decay_step}`) should be smaller than total round (`{args.R}`)... please check!'
@@ -224,6 +236,12 @@ def check_args(args):
     # print welcome message
     logger.info('[CONFIG] List up configurations...')
     for arg in vars(args):
+        if 'glove_emb' in str(arg):
+            if getattr(args, arg) is not None:
+                logger.info(f'[CONFIG] - {str(arg).upper()}: USE!')
+            else:
+                logger.info(f'[CONFIG] - {str(arg).upper()}: NOT USE!')
+            continue
         logger.info(f'[CONFIG] - {str(arg).upper()}: {getattr(args, arg)}')
     else:
         print('')
@@ -278,8 +296,8 @@ class MetricManager:
         # use optimal threshold (i.e., Youden's J or not)
         if 'youdenj' in self.metric_funcs:
             for func in self.metric_funcs.values():
-                if hasattr(func, _use_youdenj):
-                    setattr(func, _use_youdenj, True)
+                if hasattr(func, '_use_youdenj'):
+                    setattr(func, '_use_youdenj', True)
 
     def track(self, loss, pred, true):
         # update running loss
