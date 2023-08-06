@@ -25,6 +25,9 @@ class Range:
         
     def __eq__(self, other):
         return self.start <= other <= self.end
+        
+    def __str__(self):
+        return f'Specificed Range: [{self.start:.2f}, {self.end:.2f}]'
 
 ########
 # Seed #
@@ -237,7 +240,7 @@ def check_args(args):
     logger.info('[CONFIG] List up configurations...')
     for arg in vars(args):
         if 'glove_emb' in str(arg):
-            if getattr(args, arg) is not None:
+            if getattr(args, arg) is True:
                 logger.info(f'[CONFIG] - {str(arg).upper()}: USE!')
             else:
                 logger.info(f'[CONFIG] - {str(arg).upper()}: NOT USE!')
