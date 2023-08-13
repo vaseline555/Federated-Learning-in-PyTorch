@@ -32,5 +32,5 @@ def load_model(args):
         args.dropout = model.dropout
     
     if args.model_name == 'LogReg':
-        args.criterion = torch.nn.NLLLoss
+        args.criterion = 'NLLLoss'
     return model, args

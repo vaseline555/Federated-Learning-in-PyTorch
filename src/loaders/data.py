@@ -7,7 +7,7 @@ import torchvision
 import transformers
 import concurrent.futures
 
-from src import TqdmToLogger
+from src import TqdmToLogger, stratified_split
 from src.datasets import *
 from src.loaders.split import simulate_split
 
@@ -69,7 +69,7 @@ def load_dataset(args):
     def _get_transform(args, train=False):
         transform = torchvision.transforms.Compose(
             [
-                torchvision.transforms.Resize(args.resize) if args.resize is not None\
+                torchvision.transforms.Resize((args.resize, args.resize)) if args.resize is not None\
                     else torchvision.transforms.Lambda(lambda x: x),
                 torchvision.transforms.RandomCrop(args.crop, pad_if_needed=True) if (args.crop is not None and train)\
                     else torchvision.transforms.CenterCrop(args.crop) if (args.crop is not None and not train)\
@@ -92,15 +92,18 @@ def load_dataset(args):
     # method to construct per-client dataset
     def _construct_dataset(raw_train, idx, sample_indices):
         subset = torch.utils.data.Subset(raw_train, sample_indices)
-        test_size = int(len(subset) * args.test_size)
-        training_set, test_set = torch.utils.data.random_split(subset, [len(subset) - test_size, test_size])
+        if args.num_classes is None: # regression
+            training_set, test_set = torch.utils.data.random_split(subset, [len(subset) - int(len(subset) * args.test_size), int(len(subset) * args.test_size)])
+        else: # classification
+            training_set, test_set = stratified_split(subset, args.test_size)
+            
         traininig_set = SubsetWrapper(training_set, f'< {str(idx).zfill(8)} > (train)')
-        if test_size > 0:
+        if len(subset) * args.test_size > 0:
             test_set = SubsetWrapper(test_set, f'< {str(idx).zfill(8)} > (test)')
         else:
             test_set = None
         return (traininig_set, test_set)
-    
+        
     #################
     # base settings #
     #################
@@ -218,11 +221,6 @@ def load_dataset(args):
     ############
     # finalize #
     ############
-    # adjust the number of classes in a binary classification task
-    if args.num_classes == 2:
-        args.num_classes = 1
-        args.criterion = 'BCEWithLogitsLoss'
-        
     # check if global holdout set is required or not
     if args.eval_type == 'local':
         if args.test_size == -1: 

@@ -56,8 +56,8 @@ def simulate_split(args, dataset):
             raise e
         
         # get indices by class labels
-        _, unique_inverse, unique_count = np.unique(dataset.targets, return_inverse=True, return_counts=True)
-        class_indices = np.split(np.argsort(unique_inverse), np.cumsum(unique_count[:-1]))
+        _, unique_inverse, unique_counts = np.unique(dataset.targets, return_inverse=True, return_counts=True)
+        class_indices = np.split(np.argsort(unique_inverse), np.cumsum(unique_counts[:-1]))
             
         # divide shards
         num_shards_per_class = args.K * args.mincls // args.num_classes
@@ -108,76 +108,57 @@ def simulate_split(args, dataset):
     
     # Non-IID split proposed in (Hsu et al., 2019); simulation of non-IID split scenario using Dirichlet distribution
     elif args.split_type == 'diri':
-        def sample_with_mask(mask, ideal_samples_counts, concentration, num_classes, need_adjustment=False):
-            num_remaining_classes = int(mask.sum())
-            
-            # sample class selection probabilities based on Dirichlet distribution with concentration parameter (`diri_alpha`)
-            selection_prob_raw = np.random.dirichlet(alpha=np.ones(num_remaining_classes) * concentration, size=1).squeeze()
-            selection_prob = mask.copy()
-            selection_prob[selection_prob == 1.] = selection_prob_raw
-            selection_prob /= selection_prob.sum()
+        MIN_SAMPLES = int(1 / args.test_size)
 
-            # calculate per-class sample counts based on selection probabilities
-            if need_adjustment: # if remaining samples are not enough, force adjusting sample sizes...
-                selected_counts = (selection_prob * ideal_samples_counts * np.random.uniform(low=0.0, high=1.0, size=len(selection_prob))).astype(int)
-            else:
-                selected_counts = (selection_prob * ideal_samples_counts).astype(int)
-            return selected_counts
-            
         # get indices by class labels
-        _, unique_inverse, unique_count = np.unique(dataset.targets, return_inverse=True, return_counts=True)
-        class_indices = np.split(np.argsort(unique_inverse), np.cumsum(unique_count[:-1]))
-        
-        # make hashmap to track remaining samples per class
-        class_samples_counts = dict(zip([i for i in range(args.num_classes)], [len(class_idx) for class_idx in class_indices]))
-        
+        total_counts = len(dataset.targets)
+        _, unique_inverse, unique_counts = np.unique(dataset.targets, return_inverse=True, return_counts=True)
+        class_indices = np.split(np.argsort(unique_inverse), np.cumsum(unique_counts[:-1]))
+
         # calculate ideal samples counts per client
-        ideal_samples_counts = len(dataset.targets) // args.K
-        if ideal_samples_counts < 1:
+        ideal_counts = len(dataset.targets) // args.K
+        if ideal_counts < 1:
             err = f'[SIMULATE] Decrease the number of participating clients (`args.K` < {args.K})!'
             logger.exception(err)
             raise Exception(err)
 
-        # assign divided shards to clients
+        # split dataset
+        ## define temporary container
         assigned_indices = []
-        for k in TqdmToLogger(
-            range(args.K), 
-            logger=logger,
-            desc='[SIMULATE] ...assigning to clients... '
-            ):
-            # update mask according to the count of reamining samples per class
-            # i.e., do NOT sample from class having no remaining samples
-            remaining_mask = np.where(np.array(list(class_samples_counts.values())) > 0, 1., 0.)
-            selected_counts = sample_with_mask(remaining_mask, ideal_samples_counts, args.cncntrtn, args.num_classes)
 
-            # check if enough samples exist per selected class
-            expected_counts = np.subtract(np.array(list(class_samples_counts.values())), selected_counts)
-            valid_mask = np.where(expected_counts < 0, 1., 0.)
+        ## NOTE: it is possible that not all samples be consumed, as it is intended for satisfying each clients having at least `MIN_SAMPLES` samples per class
+        for k in TqdmToLogger(range(args.K), logger=logger, desc='[SIMULATE] ...assigning to clients... '):
+            ### for current client of which index is `k`
+            curr_indices = []
+            satisfied_counts = 0
+
+            ### ...until the number of samples close to ideal counts is filled
+            while satisfied_counts < ideal_counts:
+                ### define Dirichlet distribution of which prior distribution is an uniform distribution
+                diri_prior = np.random.uniform(size=args.num_classes)
+                
+                ### sample a parameter corresponded to that of categorical distribution
+                cat_param = np.random.dirichlet(alpha=args.cncntrtn * diri_prior)
+
+                ### try to sample by amount of `ideal_counts``
+                sampled = np.random.choice(args.num_classes, ideal_counts, p=cat_param)
+
+                ### count per-class samples
+                unique, counts = np.unique(sampled, return_counts=True)
+
+                ### filter out sampled classes not having as much as `MIN_SAMPLES`
+                required_counts = counts * (counts > MIN_SAMPLES)
+
+                ### assign from population indices split by classes 
+                for idx, required_class in enumerate(unique):
+                    if required_counts[idx] == 0: continue
+                    sampled_indices = class_indices[required_class][:required_counts[idx]]
+                    curr_indices.append(sampled_indices)
+                    class_indices[required_class] = class_indices[required_class][:required_counts[idx]]
+                satisfied_counts += sum(required_counts)
             
-            # if not, resample until enough samples are secured
-            while sum(valid_mask) > 0:
-                # resample from other classes instead of currently selected ones
-                adjusted_mask = (remaining_mask.astype(bool) & (~valid_mask.astype(bool))).astype(float)
-                
-                # calculate again if enoush samples exist or not
-                selected_counts = sample_with_mask(adjusted_mask, ideal_samples_counts, args.cncntrtn, args.num_classes, need_adjustment=True)    
-                expected_counts = np.subtract(np.array(list(class_samples_counts.values())), selected_counts)
-
-                # update mask for checking a termniation condition
-                valid_mask = np.where(expected_counts < 0, 1., 0.)
-                
-            # assign shards in randomly selected classes to current client
-            indices = []
-            for it, counts in enumerate(selected_counts):
-                # get indices from the selected class
-                selected_indices = class_indices[it][:counts]
-                indices.extend(selected_indices)
-                
-                # update indices and statistics
-                class_indices[it] = class_indices[it][counts:]
-                class_samples_counts[it] -= counts
-            else:
-                assigned_indices.append(indices)
+            ### when enough samples are collected, go to next clients!
+            assigned_indices.append(np.concatenate(curr_indices))
 
         # construct a hashmap
         split_map = {k: assigned_indices[k] for k in range(args.K)}

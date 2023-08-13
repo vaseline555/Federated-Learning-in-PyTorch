@@ -43,7 +43,7 @@ def sample_clients(dataset_name, root, seed, used_raw_data_fraction):
 
         if 'hierarchies' in data:
             hierarchies = []
-
+        
         while(ctot_num_samples < num_new_samples):
             hierarchy = None
             if users_and_hiers is not None:
@@ -75,7 +75,7 @@ def sample_clients(dataset_name, root, seed, used_raw_data_fraction):
             users = [u for u, h in users_and_hiers][:user_i]
         else:
             users = users[:user_i]
-        
+
         # create json file
         all_data = {}
         all_data['users'] = users
@@ -83,7 +83,7 @@ def sample_clients(dataset_name, root, seed, used_raw_data_fraction):
             all_data['hierarchies'] = hierarchies
         all_data['num_samples'] = num_samples
         all_data['user_data'] = user_data
-        
+
         # save file
         with open(os.path.join(data_dir, 'sampled_data', f'{f[:-5]}_niid_0{str(used_raw_data_fraction)[2:]}.json'), 'w') as out_file:
             json.dump(all_data, out_file)

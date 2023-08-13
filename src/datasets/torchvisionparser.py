@@ -80,7 +80,6 @@ def fetch_torchvision_dataset(args, dataset_name, root, transforms):
 
         # create training dataset instance
         raw_train = torchvision.datasets.__dict__[dataset_name](**train_args)
-        raw_train = VisionClassificationDataset(raw_train, dataset_name.upper(), 'CLIENT')
 
         # for global holdout set
         test_args = DEFAULT_ARGS.copy()
@@ -89,16 +88,22 @@ def fetch_torchvision_dataset(args, dataset_name, root, transforms):
             
         # create test dataset instance
         raw_test = torchvision.datasets.__dict__[dataset_name](**test_args)
-        raw_test = VisionClassificationDataset(raw_test, dataset_name.upper(), 'SERVER')
 
         # for compatibility, create attribute `targets`
         if dataset_name in ['DTD', 'Flowers102', 'Food101', 'FGVCAircraft']:
             setattr(raw_train, 'targets', raw_train._labels)
+            setattr(raw_test, 'targets', raw_test._labels)
         elif dataset_name in ['GTSRB', 'RenderedSST2', 'StanfordCars']:
             setattr(raw_train, 'targets', [*list(zip(*raw_train._samples))[-1]])
+            setattr(raw_test, 'targets', [*list(zip(*raw_test._samples))[-1]])
         elif dataset_name in ['STL10', 'SVHN']:
             setattr(raw_train, 'targets', raw_train.labels)
+            setattr(raw_test, 'targets', raw_test.labels)
         
+        # set raw datasets
+        raw_train = VisionClassificationDataset(raw_train, dataset_name.upper(), 'CLIENT')
+        raw_test = VisionClassificationDataset(raw_test, dataset_name.upper(), 'SERVER')
+
         # adjust arguments
         if 'RenderedSST2' in dataset_name:
             args.in_channels = 1
@@ -121,7 +126,6 @@ def fetch_torchvision_dataset(args, dataset_name, root, transforms):
             
         # create training dataset instance
         raw_train = torchvision.datasets.__dict__[dataset_name](**train_args)
-        raw_train = VisionClassificationDataset(raw_train, dataset_name.upper(), 'CLIENT')
 
         # for global holdout set
         test_args = DEFAULT_ARGS.copy()
@@ -138,7 +142,6 @@ def fetch_torchvision_dataset(args, dataset_name, root, transforms):
             
         # create test dataset instance
         raw_test = torchvision.datasets.__dict__[dataset_name](**test_args)
-        raw_test = VisionClassificationDataset(raw_test, dataset_name.upper(), 'SERVER')
         
         # for compatibility, create attribute `targets` 
         if dataset_name == 'OxfordIIITPet':
@@ -147,7 +150,11 @@ def fetch_torchvision_dataset(args, dataset_name, root, transforms):
             setattr(raw_train, 'targets', [*list(zip(*raw_train.index))[0]])
         elif dataset_name == 'Omniglot':
             setattr(raw_train, 'targets', [*list(zip(*raw_train._flat_character_images))[-1]])
-        
+
+        # set raw datasets
+        raw_train = VisionClassificationDataset(raw_train, dataset_name.upper(), 'CLIENT')
+        raw_test = VisionClassificationDataset(raw_test, dataset_name.upper(), 'SERVER')
+
         # adjust arguments
         if 'Omniglot' in dataset_name:
             args.in_channels = 1
@@ -163,11 +170,7 @@ def fetch_torchvision_dataset(args, dataset_name, root, transforms):
         
         # create training dataset instance
         raw_train = torchvision.datasets.__dict__[dataset_name](**train_args)
-        raw_train = VisionClassificationDataset(raw_train, dataset_name.upper(), 'CLIENT')
-
-        # no holdout set
-        raw_test = None
-            
+           
         # for compatibility, create attribute `targets` 
         if dataset_name == 'Caltech256':
             setattr(raw_train, 'targets', raw_train.y)
@@ -175,7 +178,11 @@ def fetch_torchvision_dataset(args, dataset_name, root, transforms):
             setattr(raw_train, 'targets', raw_train.labels)
         elif dataset_name == 'SUN397':
             setattr(raw_train, 'targets', raw_train._labels)
-            
+        
+        # set raw datasets (no holdout set is supported)
+        raw_train = VisionClassificationDataset(raw_train, dataset_name.upper(), 'CLIENT')
+        raw_test = None
+
         # adjust arguments
         if 'SEMEION' in dataset_name:
             args.in_channels = 1

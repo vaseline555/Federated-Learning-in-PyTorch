@@ -1,4 +1,3 @@
-import os
 import torch
 
 from src.models.model_utils import Lambda
@@ -6,19 +5,17 @@ from src.models.model_utils import Lambda
 
 
 class Sent140LSTM(torch.nn.Module):
-    def __init__(self, num_classes, embedding_size, hidden_size, dropout, num_layers, glove_emb_path):
+    def __init__(self, num_classes, embedding_size, hidden_size, dropout, num_layers, glove_emb):
         super(Sent140LSTM, self).__init__()
         self.embedding_size = embedding_size
         self.num_hiddens = hidden_size
         self.num_classes = num_classes
         self.dropout = dropout
         self.num_layers = num_layers
-
-        with open(os.path.join(glove_emb_path, 'glove.6B.300d.json'), 'r') as emb:
-            emb_weights = torch.tensor(eval(emb.read()))
-
+        self.glove_emb = glove_emb
+        
         self.features = torch.nn.Sequential(
-            torch.nn.Embedding.from_pretrained(emb_weights),
+            torch.nn.Embedding.from_pretrained(self.glove_emb, padding_idx=0),
             torch.nn.LSTM(
                 input_size=self.embedding_size,
                 hidden_size=self.num_hiddens,
@@ -29,7 +26,12 @@ class Sent140LSTM(torch.nn.Module):
             ),
             Lambda(lambda x: x[0])
         )
-        self.classifier = torch.nn.Linear(self.num_hiddens, self.num_classes, bias=True)
+        self.classifier = torch.nn.Sequential(
+            torch.nn.Linear(self.num_hiddens, self.num_hiddens, bias=True),
+            torch.nn.ReLU(True),
+            torch.nn.Linear(self.num_hiddens, self.num_classes, bias=True)
+        )
+
 
     def forward(self, x):
         x = self.features(x)

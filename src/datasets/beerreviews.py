@@ -121,7 +121,8 @@ def fetch_beerreviews(args, root, aspect='look', tokenizer=None):
     logger.info('[LOAD] [BEERREVIEWS] ...fetched dataset!')
     
     # adjust argument
-    args.in_features = 2
+    args.in_features = 300
+    args.num_classes = 2
     if tokenizer is None: # use FastText embedding
         args.num_embedings = len(raw_train.emb_bag)
         args.embedding_size = raw_train.emb_bag.dim

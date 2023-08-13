@@ -5,6 +5,8 @@ import logging
 
 import pandas as pd
 
+from collections import OrderedDict
+
 logger = logging.getLogger(__name__)
 
 pd.set_option('mode.chained_assignment',  None)
@@ -26,9 +28,9 @@ def preprocess(root):
         vocab = [l[0] for l in lines]
 
         # get word indices
-        vocab_indices = {w: i + 1 for i, w in enumerate(vocab)} # + 1 for padding token
+        vocab_indices = {w: i + 1 for i, w in enumerate(vocab)} # + 1 for unknown token
 
-        # get index:embedding map
+        # get index - embedding map
         embs = [[float(n) for n in l[1:]] for l in lines]
         embs.insert(0, [0. for _ in range(300)]) # for padding token
 
@@ -81,31 +83,30 @@ def preprocess(root):
             Returns:
                 indices: list of word indices, one index for each word in phrase
             """
-            pad_id = 0
+            unk_id = 0
             line_list = _split_line(line) # split phrase in words
-            indices = [word2id[w] if w in word2id else pad_id for w in line_list[:max_words]]
-            indices += [pad_id] * (max_words - len(indices))
+            indices = [word2id[w] if w in word2id else unk_id for w in line_list[:max_words]]
+            indices += [unk_id] * (max_words - len(indices))
             return indices
 
         # convert user ID into digits
         user_id_map = {str_id: int_id for int_id, str_id in enumerate(raw_all.index.unique().tolist())}
         curr_ids = raw_all.index.to_series()
         raw_all.index = curr_ids.map(user_id_map)
-
+        
         # refine raw data
-        raw_all = raw_all[raw_all['target'] != 2]
-        raw_all.loc[:, 'target'].replace({4: 1}, inplace=True)
+        raw_all.loc[:, 'target'].replace({4: 1, 2: 0}, inplace=True)
         raw_all.loc[:, 'text'] = raw_all['text'].apply(lambda x: _line_to_indices(x, indices))
         raw_all = raw_all.reset_index().groupby('user').agg({'text': lambda x: [i for i in x], 'target': lambda y: [l for l in y]}).rename(columns={'text': 'x', 'target': 'y'})
         raw_all.index = raw_all.index.astype(str)
 
         # get required elements
         users = raw_all.index.tolist()
-        num_samples = raw_all.reset_index().groupby('user').apply(len).values.tolist()
+        num_samples = raw_all['y'].apply(len).values.tolist()
         user_data = raw_all.T.to_dict()
 
         # create json file
-        all_data = {}
+        all_data = OrderedDict()
         all_data['users'] = users
         all_data['num_samples'] = num_samples
         all_data['user_data'] = user_data

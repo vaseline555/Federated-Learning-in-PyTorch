@@ -25,7 +25,7 @@ class Cover(torch.utils.data.Dataset):
         return len(self.inputs)
 
     def __getitem__(self, index):
-        inputs, targets = torch.tensor(self.inputs[index]), torch.tensor([self.targets[index]]).long()
+        inputs, targets = torch.tensor(self.inputs[index]).float(), torch.tensor(self.targets[index]).long()
         return inputs, targets
     
     def __repr__(self):
@@ -69,7 +69,7 @@ def fetch_cover(args, root, seed, test_size):
         wilderness_area = pd.Series(df.iloc[:, 10:14].values.argmax(1))
 
         # concatenate into one dataframe
-        df_raw = pd.concat([df.iloc[:, :10], wilderness_area, df.iloc[:, 14:-1], df.iloc[:, -1]], axis=1)
+        df_raw = pd.concat([df.iloc[:, :10], wilderness_area, df.iloc[:, 14:-1], df.iloc[:, -1].sub(1)], axis=1)
 
         # rename column
         df_raw.columns = COL_NAME
@@ -92,9 +92,11 @@ def fetch_cover(args, root, seed, test_size):
             test_inputs[:, :-40] = scaler.transform(test_inputs[:, :-40])
 
             # assign as a client dataset
-            client_datasets[idx] = (
-                Cover(f'[COVER] CLIENT < {name} > (train)', train_inputs, train_targets, scaler), 
-                Cover(f'[COVER] CLIENT < {name} > (test)', test_inputs, test_targets, scaler)
+            client_datasets.append(
+                (
+                    Cover(f'[COVER] CLIENT < {name} > (train)', train_inputs, train_targets, scaler), 
+                    Cover(f'[COVER] CLIENT < {name} > (test)', test_inputs, test_targets, scaler)
+                )
             )
         return client_datasets
 

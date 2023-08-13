@@ -154,13 +154,11 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_size, tra
             # set essential attributes for training
             tr_dset.identifier = f'[LOAD] [{dataset_name.upper()}] CLIENT < {str(user).zfill(8)} > (train)'
             tr_dset.data = raw_train['user_data'][user]
-            tr_dset.num_samples = raw_train['num_samples'][idx]
             tr_dset.make_dataset()
             
             # set essential attributes for test
             te_dset.identifier = f'[LOAD] [{dataset_name.upper()}] CLIENT < {str(user).zfill(8)} > (test)'
             te_dset.data = raw_test['user_data'][user]
-            te_dset.num_samples = raw_test['num_samples'][idx]
             te_dset.make_dataset()
             
             # transplant transform method

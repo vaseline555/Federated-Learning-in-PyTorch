@@ -129,7 +129,6 @@ def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
     # download files
     logger.info(f'[LOAD] [{dataset_name.upper()}] Start downloading files!')
     root = os.path.expanduser(root)
-    raw_files = []
     raw_files = torchtext.utils.download_from_url(
         url=URL[dataset_name], 
         root=root, 

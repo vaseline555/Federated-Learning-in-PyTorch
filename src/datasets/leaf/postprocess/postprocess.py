@@ -41,8 +41,8 @@ def postprocess_leaf(dataset_name, root, seed, raw_data_fraction, min_samples_pe
             os.makedirs(f'{root}/{dataset_name}/test')    
         split_datasets(dataset_name, root, seed, test_size)
     logger.info(f'[LOAD] [LEAF - {dataset_name.upper()}] ...done splitting into training & test sets!')
-    
+
     # get number of clients
-    test_data = [file for file in os.listdir(os.path.join(root, dataset_name, 'test')) if file.endswith('.json')][0]
-    num_clients = len(json.load(open(f'{root}/{dataset_name}/test/{test_data}', 'r'))['users'])
+    train_data = [file for file in os.listdir(os.path.join(root, dataset_name, 'train')) if file.endswith('.json')][0]
+    num_clients = len(json.load(open(f'{root}/{dataset_name}/train/{train_data}', 'r'))['users'])
     return num_clients

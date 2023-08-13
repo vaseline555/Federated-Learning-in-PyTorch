@@ -25,7 +25,7 @@ class Range:
         
     def __eq__(self, other):
         return self.start <= other <= self.end
-        
+    
     def __str__(self):
         return f'Specificed Range: [{self.start:.2f}, {self.end:.2f}]'
 
@@ -140,7 +140,7 @@ def init_weights(model, init_type, init_gain):
                 torch.nn.init.normal_(m.weight.data, mean=1.0, std=init_gain)
             if hasattr(m, 'bias') and m.bias is not None:
                 torch.nn.init.constant_(m.bias.data, 0.0)
-        elif hasattr(m, 'weight'):
+        elif hasattr(m, 'weight') and (classname.find('Linear') == 0 or classname.find('Conv') == 0):
             if init_type == 'normal':
                 torch.nn.init.normal_(m.weight.data, mean=0., std=init_gain)
             elif init_type == 'xavier':
@@ -160,6 +160,22 @@ def init_weights(model, init_type, init_gain):
             if hasattr(m, 'bias') and m.bias is not None:
                 torch.nn.init.constant_(m.bias.data, 0.0)
     model.apply(init_func)
+
+####################
+# Stratified Split #
+####################
+def stratified_split(raw_dataset, test_size):
+    indices_per_label = defaultdict(list)
+    for index, label in enumerate(np.array(raw_dataset.dataset.targets)[raw_dataset.indices]):
+        indices_per_label[label.item()].append(index)
+    
+    train_indices, test_indices = [], []
+    for label, indices in indices_per_label.items():
+        n_samples_for_label = round(len(indices) * test_size)
+        random_indices_sample = random.sample(indices, n_samples_for_label)
+        test_indices.extend(random_indices_sample)
+        train_indices.extend(set(indices) - set(random_indices_sample))
+    return torch.utils.data.Subset(raw_dataset, train_indices), torch.utils.data.Subset(raw_dataset, test_indices)
 
 #####################
 # Arguments checker #
@@ -206,6 +222,11 @@ def check_args(args):
         err = f'step size for learning rate decay (`{args.lr_decay_step}`) should be smaller than total round (`{args.R}`)... please check!'
         logger.exception(err)
         raise AssertionError(err)
+    
+    # adjust the number of classes in a binary classification task
+    if args.num_classes == 2:
+        args.num_classes = 1
+        args.criterion = 'BCEWithLogitsLoss'
 
     # check train only mode
     if args.test_size == 0:
@@ -328,3 +349,4 @@ class MetricManager:
     @property
     def results(self):
         return self._results
+        
