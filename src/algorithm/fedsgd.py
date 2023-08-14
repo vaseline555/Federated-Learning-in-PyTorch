@@ -27,9 +27,9 @@ class FedsgdOptimizer(FedavgOptimizer):
                 param.data.sub_(delta)
         return loss
 
-    def accumulate(self, mixing_coefficient, local_param_iterator):
+    def accumulate(self, mixing_coefficient, local_layers_iterator):
         for group in self.param_groups:
-            for server_param, (_, local_param) in zip(group['params'], local_param_iterator):
+            for server_param, (_, local_param) in zip(group['params'], local_layers_iterator):
                 local_delta = local_param.grad.mul(mixing_coefficient)
                 if server_param.grad is None:
                     server_param.grad = local_delta

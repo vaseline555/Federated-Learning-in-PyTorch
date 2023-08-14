@@ -40,7 +40,10 @@ class FedavgServer(BaseServer):
     
     def _get_algorithm(self, model, **kwargs):
         ALGORITHM_CLASS = import_module(f'..algorithm.{self.args.algorithm}', package=__package__).__dict__[f'{self.args.algorithm.title()}Optimizer']
-        return ALGORITHM_CLASS(params=model.parameters(), **kwargs)
+        optimizer = ALGORITHM_CLASS(params=model.parameters(), **kwargs)
+        if self.args.algorithm != 'fedsgd': 
+            optimizer.add_param_group(dict(params=list(self.global_model.buffers()))) # add buffered tensors (i.e., gamma and beta of batchnorm layers)
+        return optimizer
 
     def _create_clients(self, client_datasets):
         CLINET_CLASS = import_module(f'..client.{self.args.algorithm}client', package=__package__).__dict__[f'{self.args.algorithm.title()}Client']
@@ -224,8 +227,8 @@ class FedavgServer(BaseServer):
         
         # accumulate weights
         for identifier in ids:
-            locally_updated_weights_iterator = self.clients[identifier].upload()
-            self.server_optimizer.accumulate(coefficients[identifier], locally_updated_weights_iterator)
+            local_layers_iterator = self.clients[identifier].upload()
+            self.server_optimizer.accumulate(coefficients[identifier], local_layers_iterator)
             self.clients[identifier].model = None
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...successfully aggregated into a new gloal model!')
 

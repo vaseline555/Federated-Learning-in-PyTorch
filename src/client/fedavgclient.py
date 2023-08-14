@@ -1,6 +1,7 @@
 import copy
 import torch
 import inspect
+import itertools
 
 from .baseclient import BaseClient
 from src import MetricManager
@@ -82,7 +83,7 @@ class FedavgClient(BaseClient):
 
     def upload(self):
         self.model.to('cpu')
-        return self.model.named_parameters()
+        return itertools.chain.from_iterable([self.model.named_parameters(), self.model.named_buffers()])
     
     def __len__(self):
         return len(self.training_set)

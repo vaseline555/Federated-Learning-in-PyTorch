@@ -27,3 +27,6 @@ class FedsgdClient(FedavgClient):
             mm.aggregate(len(self.training_set), 1)
         return mm.results
     
+    def upload(self):
+        self.model.to('cpu')
+        return self.model.named_parameters()

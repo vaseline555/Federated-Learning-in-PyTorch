@@ -9,7 +9,7 @@ class FedavgOptimizer(BaseOptimizer, torch.optim.Optimizer):
         self.lr = kwargs.get('lr')
         self.momentum = kwargs.get('momentum', 0.)
         defaults = dict(lr=self.lr, momentum=self.momentum)
-        super(FedavgOptimizer, self).__init__(params=params, defaults=defaults)
+        BaseOptimizer.__init__(self); torch.optim.Optimizer.__init__(self, params=params, defaults=defaults)
 
     def step(self, closure=None):
         loss = None
@@ -30,14 +30,13 @@ class FedavgOptimizer(BaseOptimizer, torch.optim.Optimizer):
                 param.data.sub_(delta)
         return loss
 
-    def accumulate(self, mixing_coefficient, local_param_iterator, partial_agg_condition=lambda name: None):
+    def accumulate(self, mixing_coefficient, local_layers_iterator, partial_agg_condition=lambda name: None):
         for group in self.param_groups:
-            for server_param, (name, local_param) in zip(group['params'], local_param_iterator):
+            for server_param, (name, local_signals) in zip(group['params'], local_layers_iterator):
                 if partial_agg_condition(name):
                     continue
-                local_delta = (server_param.data - local_param.data).mul(mixing_coefficient)
+                local_delta = (server_param.data - local_signals.data).mul(mixing_coefficient)
                 if server_param.grad is None: # NOTE: grad buffer is used to accumulate local updates!
-                    server_param.grad = local_delta
+                    server_param.grad = local_delta.type(server_param.dtype)
                 else:
-                    server_param.grad.add_(local_delta)
-                
+                    server_param.grad.add_(local_delta.type(server_param.dtype))
