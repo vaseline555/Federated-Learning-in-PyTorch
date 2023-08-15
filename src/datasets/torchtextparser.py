@@ -31,7 +31,7 @@ class TextClassificationDataset(torch.utils.data.Dataset):
         return str(self.identifier)
     
 # helper method to fetch dataset from `torchtext.datasets`
-def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
+def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len, num_embeddings):
     URL = {
         'AG_NEWS': 'https://s3.amazonaws.com/fast-ai-nlp/ag_news_csv.tgz',
         'SogouNews': 'https://s3.amazonaws.com/fast-ai-nlp/sogou_news_csv.tgz',
@@ -95,23 +95,24 @@ def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
 
     def _create_data_from_iterator(vocab, iterator, max_len):
         inputs, targets = [], []
-        for label, tokens in TqdmToLogger(iterator, logger=logger):
-            tokens = torch.tensor([vocab[token] for token in tokens])
-            
-            # pad tokens into max length
+        for label, tokens in TqdmToLogger(iterator, logger=logger, desc=f'[LOAD] [{dataset_name.upper()}] ...prepare raw data!'):
+            tokens = [vocab[token] for token in tokens]
+            # pad tokens to have max length
             pad_len = max_len - len(tokens) % max_len
             if pad_len > 0:
-                tokens = torch.cat((tokens, torch.empty(pad_len).fill_(vocab['<pad>']).long()))
-            else:
-                tokens = tokens[:max_len]
+                tokens.extend([vocab['<pad>'] for _ in range(pad_len)])
+            
+            # slice tokens up to max length
+            tokens = tokens[:max_len]
 
+            # collect processed pairs
             inputs.append(tokens)
             targets.append(label)
-        return inputs, targets
+        return torch.tensor(inputs).long(), torch.tensor(targets).long()
     
     def _create_data_from_tokenizer(tokenizer, iterator, max_len):
         inputs, targets = [], []
-        for label, tokens in TqdmToLogger(iterator, logger=logger):
+        for label, tokens in TqdmToLogger(iterator, logger=logger, desc=f'[LOAD] [{dataset_name.upper()}] ...prepare raw data!'):
             tokens = tokenizer(
                 list(tokens),
                 return_tensors='pt', 
@@ -153,12 +154,12 @@ def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
     # build vocabularies using training set
     if tokenizer is None:
         logger.info(f'[LOAD] [{dataset_name.upper()}] Build vocabularies!')
-        vocab = torchtext.vocab.build_vocab_from_iterator(_csv_iterator(train_csv_path), specials=['<unk>'])
+        vocab = torchtext.vocab.build_vocab_from_iterator(_csv_iterator(train_csv_path), specials=['<unk>'], max_tokens=num_embeddings)
         vocab.set_default_index(vocab['<unk>'])
         vocab.vocab.insert_token('<pad>', 0)
         logger.info(f'[LOAD] [{dataset_name.upper()}] ...vocabularies are built!')
 
-    # tokenize training & test data and parse inputs/targets
+    # tokenize training & test data and prepare inputs/targets
     logger.info(f'[LOAD] [{dataset_name.upper()}] Create trainig & test set!')
     if tokenizer is None:
         tr_inputs, tr_targets = _create_data_from_iterator(vocab, _csv_iterator(train_csv_path, yield_cls=True), seq_len)
@@ -172,8 +173,8 @@ def fetch_torchtext_dataset(args, dataset_name, root, tokenizer, seq_len):
     tr_targets = torch.tensor([l - min_label_tr for l in tr_targets]).long()
     te_targets = torch.tensor([l - min_label_te for l in te_targets]).long()
     logger.info(f'[LOAD] [{dataset_name.upper()}] ...created training & test set!')
-    
+
     # adjust arguments
-    args.num_embeddings = len(vocab) if tokenizer is None else tokenizer.vocab_size
+    args.num_embeddings = len(vocab) + 1 if tokenizer is None else tokenizer.vocab_size
     args.num_classes = NUM_CLASSES[dataset_name]
     return TextClassificationDataset(f'[{dataset_name}] CLIENT', tr_inputs, tr_targets), TextClassificationDataset(f'[{dataset_name}] SERVER', te_inputs, te_targets), args

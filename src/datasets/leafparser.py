@@ -125,7 +125,7 @@ class Reddit(LEAFDataset):
         self.num_classes = num_classes
 
     def make_dataset(self):
-        self.inputs, self.targets = torch.tensor(self.data['x']).squeeze(), torch.tensor(self.data['y']).squeeze()
+        self.inputs, self.targets = torch.tensor(self.data['x']).squeeze(1), torch.tensor(self.data['y']).squeeze(1)
         self.num_samples = len(self.inputs)
 
     def __getitem__(self, index):

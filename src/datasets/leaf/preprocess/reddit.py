@@ -45,7 +45,7 @@ def preprocess(root):
         vocab_size = 10000
         pad_symbol, unk_symbol, bos_symbol, eos_symbol = 0, 1, 2, 3
         count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))
-        count_pairs = count_pairs[:(vocab_size - 4)] # 4 to account for special symbols
+        count_pairs = count_pairs[:vocab_size - 1]
         
         words, _ = list(zip(*count_pairs))
         words = list(words)

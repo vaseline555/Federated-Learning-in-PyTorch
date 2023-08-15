@@ -4,6 +4,62 @@ import einops
 
 
 
+##############
+# ShuffleNet #
+##############
+class ShuffleNetInvRes(torch.nn.Module):
+    def __init__(self, inp, oup, stride, branch):
+        super(ShuffleNetInvRes, self).__init__()
+        self.branch = branch
+        self.stride = stride
+        assert stride in [1, 2]
+
+        oup_inc = oup // 2
+        if self.branch == 1:
+            self.branch2 = torch.nn.Sequential(
+                torch.nn.Conv2d(oup_inc, oup_inc, 1, 1, 0, bias=False),
+                torch.nn.BatchNorm2d(oup_inc),
+                torch.nn.ReLU(True),
+                torch.nn.Conv2d(oup_inc, oup_inc, 3, stride, 1, groups=oup_inc, bias=False),
+                torch.nn.BatchNorm2d(oup_inc),
+                torch.nn.Conv2d(oup_inc, oup_inc, 1, 1, 0, bias=False),
+                torch.nn.BatchNorm2d(oup_inc),
+                torch.nn.ReLU(True),
+            )
+        else:
+            self.branch1 = torch.nn.Sequential(
+                torch.nn.Conv2d(inp, inp, 3, stride, 1, groups=inp, bias=False),
+                torch.nn.BatchNorm2d(inp),
+                torch.nn.Conv2d(inp, oup_inc, 1, 1, 0, bias=False),
+                torch.nn.BatchNorm2d(oup_inc),
+                torch.nn.ReLU(True),
+            )        
+            self.branch2 = torch.nn.Sequential(
+                torch.nn.Conv2d(oup_inc, oup_inc, 1, 1, 0, bias=False),
+                torch.nn.BatchNorm2d(oup_inc),
+                torch.nn.ReLU(True),
+                torch.nn.Conv2d(oup_inc, oup_inc, 3, stride, 1, groups=oup_inc, bias=False),
+                torch.nn.BatchNorm2d(oup_inc),
+                torch.nn.Conv2d(oup_inc, oup_inc, 1, 1, 0, bias=False),
+                torch.nn.BatchNorm2d(oup_inc),
+                torch.nn.ReLU(True),
+            )        
+
+    def forward(self, x):
+        if self.branch == 1:
+            x1 = x[:, :(x.shape[1] // 2), :, :]
+            x2 = x[:, (x.shape[1] // 2):, :, :]
+            out = torch.cat((x1, self.branch2(x2)), dim=1)
+        elif self.branch == 2:
+            out = torch.cat((self.branch1(x), self.branch2(x)), dim=1)
+
+        B, C, H, W = out.size()
+        channels_per_group = C // 2
+        out = out.view(B, 2, channels_per_group, H, W)
+        out = torch.transpose(out, 1, 2).contiguous()
+        out = out.view(B, -1, H, W)
+        return out
+    
 ##########################
 # MobileNet & MobileNeXt #
 ##########################
@@ -159,7 +215,7 @@ class SNXBlock(torch.nn.Module):
             
     def forward(self, x):
         out = self.squeeze(x)
-        out += self.act(self.shortcut(x))
+        out = out + self.act(self.shortcut(x))
         out = self.act(out)
         return out
 
@@ -354,3 +410,25 @@ class Lambda(torch.nn.Module):
 
     def forward(self, x): 
         return self.func(x)
+
+#############################
+# Positional Encoding Layer #
+#############################
+class PositionalEncoding(torch.nn.Module):
+    def __init__(self, d_model, dropout, max_len=10000):
+        super().__init__()
+        self.d_model = d_model
+        self.dropout = torch.nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x * math.sqrt(self.d_model)
+        x = x + self.pe[:x.size(0)]
+        x = self.dropout(x)
+        return x

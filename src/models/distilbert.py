@@ -5,8 +5,9 @@ from transformers import DistilBertModel, DistilBertConfig
 
 
 class DistilBert(torch.nn.Module):
-    def __init__(self, num_classes, num_embeddings, embedding_size, hidden_size, dropout, use_pt_model=False):
+    def __init__(self, num_classes, num_embeddings, embedding_size, hidden_size, dropout, use_pt_model, is_seq2seq):
         super(DistilBert, self).__init__()
+        self.is_seq2seq = is_seq2seq
         # define encoder        
         if use_pt_model: # fine-tuning
             self.features = DistilBertModel.from_pretrained('distilbert-base-uncased')
@@ -17,7 +18,6 @@ class DistilBert(torch.nn.Module):
             self.dropout = self.features.config.dropout
 
             self.classifier = torch.nn.Linear(self.embedding_size, self.num_classes, bias=True)
-
         else: # from scratch
             self.num_classes = num_classes
             self.num_embeddings = num_embeddings
@@ -36,6 +36,6 @@ class DistilBert(torch.nn.Module):
 
     def forward(self, x):
         x = self.features(x)[0]
-        x = self.classifier(x[:, 0, :]) # use [CLS] token for classification
+        x = self.classifier(x.last_hidden_state if self.is_seq2seq else x[:, 0, :]) # use [CLS] token for classification
         return x
     

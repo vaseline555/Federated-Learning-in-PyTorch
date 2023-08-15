@@ -5,8 +5,9 @@ from transformers import MobileBertModel, MobileBertConfig
 
 
 class MobileBert(torch.nn.Module):
-    def __init__(self, num_classes, num_embeddings, embedding_size, hidden_size, dropout, use_pt_model=False):
+    def __init__(self, num_classes, num_embeddings, embedding_size, hidden_size, dropout, use_pt_model, is_seq2seq):
         super(MobileBert, self).__init__()
+        self.is_seq2seq = is_seq2seq
         # define encoder        
         if use_pt_model: # fine-tuning
             self.features = MobileBertModel.from_pretrained('google/mobilebert-uncased')
@@ -35,6 +36,6 @@ class MobileBert(torch.nn.Module):
             self.classifier = torch.nn.Linear(self.num_hiddens, self.num_classes, bias=True)
 
     def forward(self, x):
-        x = self.features(x)['pooler_output']
-        x = self.classifier(x)
+        x = self.features(x)
+        x = self.classifier(x['last_hidden_state'] if self.is_seq2seq else x['pooler_output'])
         return x

@@ -168,7 +168,7 @@ def load_dataset(args):
         
     elif args.dataset in torchtext.datasets.__dict__.keys(): # 4) for downloadable datasets in `torchtext.datasets`...
         _check_and_raise_error(args.split_type, 'pre', 'split scenario')
-        raw_train, raw_test, args = fetch_torchtext_dataset(args=args, dataset_name=args.dataset, root=args.data_path, seq_len=args.seq_len, tokenizer=tokenizer) 
+        raw_train, raw_test, args = fetch_torchtext_dataset(args=args, dataset_name=args.dataset, root=args.data_path, seq_len=args.seq_len, tokenizer=tokenizer, num_embeddings=args.num_embeddings) 
         
     elif args.dataset == 'TinyImageNet': # 5) for other public datasets...
         _check_and_raise_error(args.split_type, 'pre', 'split scenario')

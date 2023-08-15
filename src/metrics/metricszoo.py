@@ -203,7 +203,8 @@ class Seqacc(BaseMetric):
         # ignore special tokens
         labels = labels[answers != -1]
         answers = answers[answers != -1]
-        return accuracy_score(answers, labels)
+        return np.nan_to_num(accuracy_score(answers, labels))
+
 
 class Mse(BaseMetric):
     def __init__(self):

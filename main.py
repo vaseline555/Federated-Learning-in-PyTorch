@@ -100,7 +100,7 @@ if __name__ == "__main__":
     - `diri`: Dirichlet distribution-based split scenario proposed in (Hsu et al., 2019),
     - `pre`: pre-defined data split scenario
     ''', type=str, choices=['iid', 'unbalanced', 'patho', 'diri', 'pre'], required=True)
-    parser.add_argument('--mincls', help='the minimum number of distinct classes per client (valid only if `split_type` is `patho`)', type=int, default=2)
+    parser.add_argument('--mincls', help='the minimum number of distinct classes per client (valid only if `split_type` is `patho` or `diri`)', type=int, default=2)
     parser.add_argument('--cncntrtn', help='a concentration parameter for Dirichlet distribution (valid only if `split_type` is `diri`)', type=float, default=0.1)
     
     
@@ -114,10 +114,9 @@ if __name__ == "__main__":
             'LeNet', 'MobileNet', 'SqueezeNet',
             'VGG9', 'VGG9BN', 'VGG11', 'VGG11BN', 'VGG13', 'VGG13BN',
             'ResNet10', 'ResNet18', 'ResNet34',
-            'MobileNeXt', 'SqueezeNeXt', 'MobileViT', 
-            'NextCharLSTM', 'NextWordLSTM',
-            'DistilBert', 'SqueezeBert', 'MobileBert',
-            'LogReg', 'GRUClassifier'
+            'ShuffleNet', 'MobileNeXt', 'SqueezeNeXt', 'MobileViT', 
+            'StackedLSTM', 'StackedTransformer', 'LogReg',
+            'DistilBert', 'SqueezeBert', 'MobileBert'
         ],
         required=True
     )
@@ -166,6 +165,7 @@ if __name__ == "__main__":
     # optimization arguments
     parser.add_argument('--no_shuffle', help='do not shuffle data when training (if passed)', action='store_true')
     parser.add_argument('--optimizer', help='type of optimization method (NOTE: should be a sub-module of `torch.optim`, thus case-sensitive)', type=str, default='SGD', required=True)
+    parser.add_argument('--max_grad_norm', help='a constant required for gradient clipping', type=float, choices=[Range(0., float('inf'))], default=0.)
     parser.add_argument('--weight_decay', help='weight decay (L2 penalty)', type=float, choices=[Range(0., 1.)], default=0)
     parser.add_argument('--momentum', help='momentum factor', type=float, choices=[Range(0., 1.)], default=0.)
     parser.add_argument('--lr', help='learning rate for local updates in each client', type=float, choices=[Range(0., 100.)], default=0.01, required=True)

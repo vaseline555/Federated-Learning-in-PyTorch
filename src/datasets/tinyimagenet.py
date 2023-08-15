@@ -1,4 +1,5 @@
 import os
+import torch
 import shutil
 import logging
 import torchvision

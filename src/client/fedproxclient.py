@@ -1,4 +1,5 @@
 import copy
+import torch
 
 from .fedavgclient import FedavgClient
 from src import MetricManager
@@ -33,6 +34,8 @@ class FedproxClient(FedavgClient):
                 for param in self.model.parameters():
                     param.grad = None
                 loss.backward()
+                if self.args.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
                 optimizer.step()
                 
                 mm.track(loss.item(), outputs, targets)

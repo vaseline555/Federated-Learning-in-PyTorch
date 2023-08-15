@@ -228,6 +228,12 @@ def check_args(args):
         args.num_classes = 1
         args.criterion = 'BCEWithLogitsLoss'
 
+    # check task
+    if args.criterion == 'Seq2SeqLoss':
+        args.is_seq2seq = True
+    else:
+        args.is_seq2seq = False
+
     # check train only mode
     if args.test_size == 0:
         args._train_only = True
@@ -299,6 +305,8 @@ class Seq2SeqLoss(torch.nn.CrossEntropyLoss):
         num_classes = inputs.size(-1)
         inputs, targets = inputs.view(-1, num_classes), targets.view(-1)
         targets[torch.isin(targets, ignore_indices.to(targets.device))] = -1
+        if targets.float().mean() == -1.: # if all targets are special tokens
+            return inputs.mul(torch.zeros_like(inputs).float()).sum()
         return torch.nn.functional.cross_entropy(inputs, targets, ignore_index=-1)
 
 torch.nn.Seq2SeqLoss = Seq2SeqLoss

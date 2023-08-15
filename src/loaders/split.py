@@ -145,7 +145,9 @@ def simulate_split(args, dataset):
 
                 ### count per-class samples
                 unique, counts = np.unique(sampled, return_counts=True)
-
+                if len(unique) < args.mincls: 
+                    continue
+                
                 ### filter out sampled classes not having as much as `MIN_SAMPLES`
                 required_counts = counts * (counts > MIN_SAMPLES)
 
