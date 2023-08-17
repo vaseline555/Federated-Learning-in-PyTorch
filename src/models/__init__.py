@@ -1,8 +1,10 @@
 from .twonn import TwoNN
 from .twocnn import TwoCNN
 from .lenet import LeNet
+from .m5 import M5
 from .vgg import *
 from .resnet import *
+from .shufflenet import ShuffleNet
 from .mobilenet import MobileNet
 from .mobilenext import MobileNeXt
 from .squeezenet import SqueezeNet
@@ -16,5 +18,4 @@ from .logreg import LogReg
 from .simplecnn import SimpleCNN
 from .femnistcnn import FEMNISTCNN
 from .sent140lstm import Sent140LSTM
-from .shufflenet import ShuffleNet
 from .stackedtransformer import StackedTransformer

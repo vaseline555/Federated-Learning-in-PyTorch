@@ -103,7 +103,7 @@ def load_dataset(args):
         else:
             test_set = None
         return (traininig_set, test_set)
-        
+    
     #################
     # base settings #
     #################
@@ -179,7 +179,11 @@ def load_dataset(args):
         _check_and_raise_error(args.split_type, 'pre', 'split scenario')
         transforms = [_get_transform(args, train=True), _get_transform(args, train=False)]
         raw_train, raw_test, args = fetch_cinic10(args=args, root=args.data_path, transforms=transforms)
-        
+    
+    elif args.dataset == 'SpeechCommands':
+        _check_and_raise_error(args.split_type, 'pre', 'split scenario')
+        raw_train, raw_test, args = fetch_speechcommands(args=args, root=args.data_path)
+
     elif 'BeerReviews' in args.dataset:
         _check_and_raise_error(args.split_type, 'pre', 'split scenario')
         aspect_type = {'A': 'aroma', 'L': 'look'}

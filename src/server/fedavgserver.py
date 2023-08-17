@@ -162,17 +162,16 @@ class FedavgServer(BaseServer):
         logger.info(total_log_string)
         return result_dict
 
-    def _request(self, ids, eval=False, participated=False):
+    def _request(self, ids, eval, participated, retain_model):
         def __update_clients(client):
             client.args.lr = self.lr_scheduler.get_last_lr()[-1]
             update_result = client.update()
             return {client.id: len(client.training_set)}, {client.id: update_result}
 
         def __evaluate_clients(client):
-            if client.model is None:
-                client.download(self.global_model)
-            eval_result = client.evaluate() 
-            client.model = None
+            eval_result = client.evaluate()
+            if not retain_model: 
+                client.model = None
             return {client.id: len(client.test_set)}, {client.id: eval_result}
 
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Request {"updates" if not eval else "evaluation"} to {"all" if ids is None else len(ids)} clients!')
@@ -188,15 +187,16 @@ class FedavgServer(BaseServer):
                     total=len(ids)
                     ):
                     results.append(workhorse.submit(__evaluate_clients, self.clients[idx]).result()) 
-            eval_sizes, eval_results = list(map(list, zip(*results)))
-            eval_sizes, eval_results = dict(ChainMap(*eval_sizes)), dict(ChainMap(*eval_results))
+            _eval_sizes, _eval_results = list(map(list, zip(*results)))
+            _eval_sizes, _eval_results = dict(ChainMap(*_eval_sizes)), dict(ChainMap(*_eval_results))
             self.results[self.round][f'clients_evaluated_{"in" if participated else "out"}'] = self._log_results(
-                eval_sizes, 
-                eval_results, 
+                _eval_sizes, 
+                _eval_results, 
                 eval=True, 
                 participated=participated
             )
             logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...completed evaluation of {"all" if ids is None else len(ids)} clients!')
+            return None
         else:
             results = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
@@ -207,11 +207,11 @@ class FedavgServer(BaseServer):
                     total=len(ids)
                     ):
                     results.append(workhorse.submit(__update_clients, self.clients[idx]).result()) 
-            update_sizes, update_results = list(map(list, zip(*results)))
-            update_sizes, update_results = dict(ChainMap(*update_sizes)), dict(ChainMap(*update_results))
+            update_sizes, _update_results = list(map(list, zip(*results)))
+            update_sizes, _update_results = dict(ChainMap(*update_sizes)), dict(ChainMap(*_update_results))
             self.results[self.round]['clients_updated'] = self._log_results(
                 update_sizes, 
-                update_results, 
+                _update_results, 
                 eval=False, 
                 participated=True
             )
@@ -278,7 +278,8 @@ class FedavgServer(BaseServer):
         selected_ids = self._sample_clients() # randomly select clients
         self._broadcast_models(selected_ids) # broadcast the current model at the server to selected clients
         updated_sizes = self._request(selected_ids, eval=False) # request update to selected clients
-    
+        _ = self._request(selected_ids, eval=True, participated=True, retain_model=True) # request evaluation to selected clients 
+
         #################
         # Server Update #
         #################
@@ -287,8 +288,6 @@ class FedavgServer(BaseServer):
         self.server_optimizer.step() # update global model with by the aggregated update
         if self.round % self.args.lr_decay_step == 0: # update local learning rate
             self.lr_scheduler.step()
-        self._request(selected_ids, eval=True, participated=True) # request evaluation to selected clients 
-        # (this is located at last INTENTIONALLY to free out model pointer without problem)
         return selected_ids
 
     def evaluate(self, excluded_ids):
@@ -299,7 +298,8 @@ class FedavgServer(BaseServer):
         ##############
         if self.args.eval_type != 'global': # `local` or `both`: evaluate on selected clients' holdout set
             selected_ids = self._sample_clients(exclude=excluded_ids)
-            self._request(selected_ids, eval=True, participated=False)
+            self._broadcast_models(selected_ids)
+            _ = self._request(selected_ids, eval=True, participated=False, retain_model=False)
         if self.args.eval_type != 'local': # `global` or `both`: evaluate on the server's global holdout set 
             self._central_evaluate()
 
