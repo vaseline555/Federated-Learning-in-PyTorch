@@ -58,6 +58,8 @@ class FedavgClient(BaseClient):
                 mm.track(loss.item(), outputs, targets)
             else:
                 mm.aggregate(len(self.training_set), e + 1)
+        else:
+            self.model.to('cpu')
         return mm.results
 
     @torch.inference_mode()
@@ -77,6 +79,7 @@ class FedavgClient(BaseClient):
 
             mm.track(loss.item(), outputs, targets)
         else:
+            self.model.to('cpu')
             mm.aggregate(len(self.test_set))
         return mm.results
 
@@ -84,7 +87,6 @@ class FedavgClient(BaseClient):
         self.model = copy.deepcopy(model)
 
     def upload(self):
-        self.model.to('cpu')
         return itertools.chain.from_iterable([self.model.named_parameters(), self.model.named_buffers()])
     
     def __len__(self):

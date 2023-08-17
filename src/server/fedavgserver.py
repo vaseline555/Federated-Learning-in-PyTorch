@@ -66,22 +66,6 @@ class FedavgServer(BaseServer):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...sucessfully created {self.args.K} clients!')
         return clients
 
-    def _broadcast_models(self, ids):
-        def __broadcast_model(client):
-            client.download(self.global_model)
-        
-        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Broadcast the global model at the server!')
-        self.global_model.to('cpu')
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
-            for identifier in TqdmToLogger(
-                ids, 
-                logger=logger, 
-                desc=f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...broadcasting server model... ',
-                total=len(ids)
-                ):
-                workhorse.submit(__broadcast_model, self.clients[identifier]).result()
-        logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] ...sucessfully broadcasted the model to selected {len(ids)} clients!')
-
     def _sample_clients(self, exclude=[]):
         logger.info(f'[{self.args.algorithm.upper()}] [Round: {str(self.round).zfill(4)}] Sample clients!')
         if exclude == []: # Update - randomly select max(floor(C * K), 1) clients
@@ -169,8 +153,10 @@ class FedavgServer(BaseServer):
             return {client.id: len(client.training_set)}, {client.id: update_result}
 
         def __evaluate_clients(client):
-            eval_result = client.evaluate()
-            if not retain_model: 
+            if client.model is None:
+                client.download(self.global_model)
+            eval_result = client.evaluate() 
+            if not retain_model:
                 client.model = None
             return {client.id: len(client.test_set)}, {client.id: eval_result}
 
@@ -246,6 +232,7 @@ class FedavgServer(BaseServer):
 
             mm.track(loss.item(), outputs, targets)
         else:
+            self.global_model.to('cpu')
             mm.aggregate(len(self.server_dataset))
 
         # log result
@@ -276,7 +263,6 @@ class FedavgServer(BaseServer):
         # Client Update #
         #################
         selected_ids = self._sample_clients() # randomly select clients
-        self._broadcast_models(selected_ids) # broadcast the current model at the server to selected clients
         updated_sizes = self._request(selected_ids, eval=False) # request update to selected clients
         _ = self._request(selected_ids, eval=True, participated=True, retain_model=True) # request evaluation to selected clients 
 
@@ -298,7 +284,6 @@ class FedavgServer(BaseServer):
         ##############
         if self.args.eval_type != 'global': # `local` or `both`: evaluate on selected clients' holdout set
             selected_ids = self._sample_clients(exclude=excluded_ids)
-            self._broadcast_models(selected_ids)
             _ = self._request(selected_ids, eval=True, participated=False, retain_model=False)
         if self.args.eval_type != 'local': # `global` or `both`: evaluate on the server's global holdout set 
             self._central_evaluate()

@@ -27,9 +27,9 @@ class FedsgdClient(FedavgClient):
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.max_grad_norm)
             mm.track(loss.item(), outputs, targets)
         else:
+            self.model.to('cpu')
             mm.aggregate(len(self.training_set), 1)
         return mm.results
     
     def upload(self):
-        self.model.to('cpu')
         return self.model.named_parameters()

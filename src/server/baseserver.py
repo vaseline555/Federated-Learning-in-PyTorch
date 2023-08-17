@@ -46,10 +46,6 @@ class BaseServer(metaclass=ABCMeta):
         raise NotImplementedError
 
     @abstractmethod
-    def _broadcast_models(self, indices):
-        raise NotImplementedError
-
-    @abstractmethod
     def _sample_clients(self):
         raise NotImplementedError
 

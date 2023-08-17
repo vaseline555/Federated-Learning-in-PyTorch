@@ -222,17 +222,6 @@ def check_args(args):
         err = f'step size for learning rate decay (`{args.lr_decay_step}`) should be smaller than total round (`{args.R}`)... please check!'
         logger.exception(err)
         raise AssertionError(err)
-    
-    # adjust the number of classes in a binary classification task
-    if args.num_classes == 2:
-        args.num_classes = 1
-        args.criterion = 'BCEWithLogitsLoss'
-
-    # check task
-    if args.criterion == 'Seq2SeqLoss':
-        args.is_seq2seq = True
-    else:
-        args.is_seq2seq = False
 
     # check train only mode
     if args.test_size == 0:
@@ -263,6 +252,17 @@ def check_args(args):
             logger.exception(err)
             raise AssertionError(err)
 
+    # adjust the number of classes in a binary classification task
+    if args.num_classes == 2:
+        args.num_classes = 1
+        args.criterion = 'BCEWithLogitsLoss'
+
+    # check task
+    if args.criterion == 'Seq2SeqLoss':
+        args.is_seq2seq = True
+    else:
+        args.is_seq2seq = False
+        
     # print welcome message
     logger.info('[CONFIG] List up configurations...')
     for arg in vars(args):

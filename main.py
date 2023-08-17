@@ -45,7 +45,7 @@ def main(args, writer):
         selected_ids = server.update() 
 
         ## evaluate on clients not sampled (for measuring generalization performance)
-        if curr_round % args.eval_every == 0:
+        if (curr_round % args.eval_every == 0) or (curr_round == args.R):
             server.evaluate(excluded_ids=selected_ids)
     else:
         ## wrap-up

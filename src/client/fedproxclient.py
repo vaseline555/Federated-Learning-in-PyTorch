@@ -41,5 +41,7 @@ class FedproxClient(FedavgClient):
                 mm.track(loss.item(), outputs, targets)
             else:
                 mm.aggregate(len(self.training_set), e + 1)
+        else:
+            self.model.to('cpu')
         return mm.results
     
