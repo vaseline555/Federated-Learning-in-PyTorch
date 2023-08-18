@@ -30,8 +30,8 @@ class FedsgdOptimizer(FedavgOptimizer):
     def accumulate(self, mixing_coefficient, local_layers_iterator):
         for group in self.param_groups:
             for server_param, (_, local_param) in zip(group['params'], local_layers_iterator):
-                local_delta = local_param.grad.mul(mixing_coefficient)
+                local_delta = local_param.grad.mul(mixing_coefficient).data.type(server_param.dtype)
                 if server_param.grad is None:
                     server_param.grad = local_delta
                 else:
-                    server_param.grad.add_(local_delta)
+                    server_param.grad.data.add_(local_delta)
