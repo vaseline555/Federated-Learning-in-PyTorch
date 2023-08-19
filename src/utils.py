@@ -225,9 +225,9 @@ def check_args(args):
 
     # check train only mode
     if args.test_size == 0:
-        args._train_only = True
+        args.train_only = True
     else:
-        args._train_only = False
+        args.train_only = False
 
     # check compatibility of evaluation metrics
     if hasattr(args, 'num_classes'):

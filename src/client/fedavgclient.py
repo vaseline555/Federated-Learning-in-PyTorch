@@ -64,7 +64,7 @@ class FedavgClient(BaseClient):
 
     @torch.inference_mode()
     def evaluate(self):
-        if self.args._train_only: # `args.test_size` == 0
+        if self.args.train_only: # `args.test_size` == 0
             return {'loss': -1, 'metrics': {'none': -1}}
 
         mm = MetricManager(self.args.eval_metrics)

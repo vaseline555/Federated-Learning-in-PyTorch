@@ -163,7 +163,7 @@ class FedavgServer(BaseServer):
 
         logger.info(f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] Request {"updates" if not eval else "evaluation"} to {"all" if ids is None else len(ids)} clients!')
         if eval:
-            if self.args._train_only:
+            if self.args.train_only:
                 return
             results = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
@@ -265,8 +265,8 @@ class FedavgServer(BaseServer):
         # Client Update #
         #################
         selected_ids = self._sample_clients() # randomly select clients
-        _ = self._request(selected_ids, eval=True, participated=True, retain_model=True) # request evaluation to selected clients 
         updated_sizes = self._request(selected_ids, eval=False) # request update to selected clients
+        _ = self._request(selected_ids, eval=True, participated=True, retain_model=True) # request evaluation to selected clients 
         
         #################
         # Server Update #
@@ -292,7 +292,7 @@ class FedavgServer(BaseServer):
             self._central_evaluate()
 
         # calculate generalization gap
-        if (not self.args._train_only) and (not self.args.eval_type == 'global'):
+        if (not self.args.train_only) and (not self.args.eval_type == 'global'):
             gen_gap = dict()
             curr_res = self.results[self.round]
             for key in curr_res['clients_evaluated_out'].keys():
