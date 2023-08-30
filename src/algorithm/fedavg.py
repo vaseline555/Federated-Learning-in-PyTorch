@@ -16,24 +16,26 @@ class FedavgOptimizer(BaseOptimizer, torch.optim.Optimizer):
         if closure is not None:
             loss = closure()
 
-        for group in self.param_groups:
+        for idx, group in enumerate(self.param_groups):
             beta = group['momentum']
             for param in group['params']:
                 if param.grad is None:
                     continue
                 delta = param.grad.data
-                if beta > 0.:
-                    if 'momentum_buffer' not in self.state[param]:
-                        self.state[param]['momentum_buffer'] = torch.zeros_like(param).detach()
-                    self.state[param]['momentum_buffer'].mul_(beta).add_(delta.mul(1. - beta)) # \beta * v + (1 - \beta) * grad
-                    delta = self.state[param]['momentum_buffer']
+
+                if idx == 0: # idx == 0: parameters; optimize according to algorithm // idx == 1: buffers; just averaging
+                    if beta > 0.:
+                        if 'momentum_buffer' not in self.state[param]:
+                            self.state[param]['momentum_buffer'] = torch.zeros_like(param).detach()
+                        self.state[param]['momentum_buffer'].mul_(beta).add_(delta.mul(1. - beta)) # \beta * v + (1 - \beta) * grad
+                        delta = self.state[param]['momentum_buffer']
                 param.data.sub_(delta)
         return loss
 
-    def accumulate(self, mixing_coefficient, local_layers_iterator, partial_agg_condition=lambda name: 'num_batches_tracked' in name):
+    def accumulate(self, mixing_coefficient, local_layers_iterator, check_if=lambda name: 'num_batches_tracked' in name):
         for group in self.param_groups:
             for server_param, (name, local_signals) in zip(group['params'], local_layers_iterator):
-                if partial_agg_condition(name):
+                if check_if(name):
                     server_param.data.zero_()
                     server_param.data.grad = torch.zeros_like(server_param)
                     continue

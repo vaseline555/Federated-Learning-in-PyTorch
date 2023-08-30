@@ -5,7 +5,7 @@ import logging
 
 import pandas as pd
 
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,6 @@ pd.set_option('mode.chained_assignment',  None)
 def preprocess(root):
     RAW_TRAINING = 'training.1600000.processed.noemoticon.csv'
     RAW_TEST  = 'testdata.manual.2009.06.14.csv'
-    
     def _get_glove_vocab(path):
         # read GloVe embeddings (300-dim)
         lines = []
@@ -28,11 +27,13 @@ def preprocess(root):
         vocab = [l[0] for l in lines]
 
         # get word indices
-        vocab_indices = {w: i + 1 for i, w in enumerate(vocab)} # + 1 for unknown token
+        vocab_indices = defaultdict(int)
+        for i, w in enumerate(vocab):
+            vocab_indices[w] = i + 1
 
         # get index - embedding map
         embs = [[float(n) for n in l[1:]] for l in lines]
-        embs.insert(0, [0. for _ in range(300)]) # for padding token
+        embs.insert(0, [0. for _ in range(300)]) # for unknown token
 
         # save into file
         with open(os.path.join(path, 'vocab', 'glove.6B.300d.json'), 'w') as file:
@@ -59,7 +60,51 @@ def preprocess(root):
         raw_all = pd.concat([raw_train, raw_test]).sort_index(kind='mergesort')
         return raw_all
         
-    def _convert_to_json(path, raw_all, indices):       
+    def _convert_to_json(path, raw_all, indices):
+        def _cleanse(df):
+            # dictionary containing all emojis with their meanings.
+            emojis = {
+                ':)': 'smile', ':-)': 'smile', ';d': 'wink', ':-E': 'vampire', ':(': 'sad', 
+                ':-(': 'sad', ':-<': 'sad', ':P': 'raspberry', ':O': 'surprised',
+                ':-@': 'shocked', ':@': 'shocked',':-$': 'confused', ':\\': 'annoyed', 
+                ':#': 'mute', ':X': 'mute', ':^)': 'smile', ':-&': 'confused', '$_$': 'greedy',
+                '@@': 'eyeroll', ':-!': 'confused', ':-D': 'smile', ':-0': 'yell', 'O.o': 'confused',
+                '<(-_-)>': 'robot', 'd[-_-]b': 'dj', ":'-)": 'sadsmile', ';)': 'wink', 
+                ';-)': 'wink', 'O:-)': 'angel','O*-)': 'angel','(:-D': 'gossip', '=^.^=': 'cat'
+            }
+
+            # replace mentions
+            df = df.apply(lambda x: re.sub(r"@[^\s]+", "USER", str(x).strip()))
+
+            # replace links
+            df = df.apply(lambda x: re.sub(r"((http://)[^ ]*|(https://)[^ ]*|( www\.)[^ ]*)", "URL", str(x).strip()))
+
+            # remove non-alphabetical characters
+            df = df.apply(lambda x: re.sub(r"[^A-Za-z0-9]+", " ", str(x).strip()))
+
+            # remove numbers 
+            df = df.apply(lambda x: re.sub(r"[0-9]+", " ", str(x).strip()))
+
+            # remove ordinals 
+            df = df.apply(lambda x: re.sub(r"[0-9]+(?:st| st|nd| nd|rd| rd|th| th)"  , " ", str(x).strip()))
+
+            # remove punctuations
+            df = df.str.replace(r'[^\w\s]', '', regex=True)
+
+            # replace 3 or more consecutive letters by 2 letter 
+            df = df.apply(lambda x: re.sub(r"(.)\1\1+", r"\1\1", str(x).strip()))
+
+            # replace emojis
+            for emoji, name in emojis.items():
+                df = df.str.replace(emoji, name, regex=False)
+
+            # normalize whitespaces
+            df = df.str.replace(r'\s+', ' ', regex=True)
+
+            # to lowercase
+            df = df.str.lower()
+            return df
+
         def _split_line(line):
             """Split given line/phrase into list of words
             """
@@ -85,7 +130,7 @@ def preprocess(root):
             """
             unk_id = 0
             line_list = _split_line(line) # split phrase in words
-            indices = [word2id[w] if w in word2id else unk_id for w in line_list[:max_words]]
+            indices = [word2id[w] for w in line_list[:max_words]]
             indices += [unk_id] * (max_words - len(indices))
             return indices
 
@@ -96,6 +141,7 @@ def preprocess(root):
         
         # refine raw data
         raw_all.loc[:, 'target'].replace({4: 1, 2: 0}, inplace=True)
+        raw_all.loc[:, 'text'] = _cleanse(raw_all.loc[:, 'text'])
         raw_all.loc[:, 'text'] = raw_all['text'].apply(lambda x: _line_to_indices(x, indices))
         raw_all = raw_all.reset_index().groupby('user').agg({'text': lambda x: [i for i in x], 'target': lambda y: [l for l in y]}).rename(columns={'text': 'x', 'target': 'y'})
         raw_all.index = raw_all.index.astype(str)

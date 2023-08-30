@@ -12,7 +12,7 @@ do
             --split_type iid --test_size 0 \
             --model_name TwoCNN --resize 28 --hidden_size 200 \
             --algorithm fedavg --eval_fraction 1 --eval_type both --eval_every 1 --eval_metrics acc1 acc5 \
-            --K 100 --R 1000 --E 5 --C $c --B $b --beta 0 \
+            --K 100 --R 1000 --E 5 --C $c --B $b --beta1 0 \
             --optimizer SGD --lr 0.215 --lr_decay 0.95 --lr_decay_step 25 --criterion CrossEntropyLoss
     done     
 done 
@@ -28,7 +28,7 @@ do
             --split_type patho --test_size 0 \
             --model_name TwoCNN --resize 28 --hidden_size 200 \
             --algorithm fedavg --eval_fraction 1 --eval_type both --eval_every 1 --eval_metrics acc1 acc5 \
-            --K 100 --R 1000 --E 5 --C $c --B $b --beta 0 \
+            --K 100 --R 1000 --E 5 --C $c --B $b --beta1 0 \
             --optimizer SGD --lr 0.1 --lr_decay 0.99 --lr_decay_step 10 --criterion CrossEntropyLoss
     done     
 done 

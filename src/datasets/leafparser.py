@@ -135,7 +135,7 @@ def fetch_leaf(args, dataset_name, root, seed, raw_data_fraction, test_size, tra
     CONFIG = {
         'femnist': {'in_channels': 1, 'num_classes': 62},
         'shakespeare': {'num_embeddings': 80, 'num_classes': 80},
-        'sent140': {'num_embeddings': 400000 + 1, 'seq_len': 25, 'num_classes': 2}, # using GloVe 300-dim embeddings; 400000 + 1 for an unknown token
+        'sent140': {'num_embeddings': 400000 + 1 if args.model_name == 'Sent140LSTM' else None, 'seq_len': 25, 'num_classes': 2}, # using GloVe 300-dim embeddings
         'celeba': {'in_channels': 3, 'img_path': f'{root}/celeba/raw/img_align_celeba', 'num_classes': 2},
         'reddit': {'num_embeddings': 10000, 'seq_len': 10, 'num_classes': 10000} # + 1 for an unknown token
     }

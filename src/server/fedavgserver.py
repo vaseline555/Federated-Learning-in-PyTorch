@@ -27,6 +27,7 @@ class FedavgServer(BaseServer):
         if self.args.eval_type != 'local': # global holdout set for central evaluation
             self.server_dataset = server_dataset
         self.global_model = self._init_model(model) # global model
+        self.opt_kwargs = dict(lr=self.args.lr, momentum=self.args.beta1) # federation algorithm arguments
         self.curr_lr = self.args.lr # learning rate
         self.clients = self._create_clients(client_datasets) # clients container
         self.results = defaultdict(dict) # logging results container
@@ -149,7 +150,7 @@ class FedavgServer(BaseServer):
         def __update_clients(client):
             if client.model is None:
                 client.download(self.global_model)
-            client.args.lr = self.lr_scheduler.get_last_lr()[-1]
+            client.args.lr = self.curr_lr
             update_result = client.update()
             return {client.id: len(client.training_set)}, {client.id: update_result}
 
@@ -271,7 +272,7 @@ class FedavgServer(BaseServer):
         #################
         # Server Update #
         #################
-        server_optimizer = self._get_algorithm(self.global_model, lr=self.curr_lr, momentum=self.args.beta)
+        server_optimizer = self._get_algorithm(self.global_model, **self.opt_kwargs)
         server_optimizer.zero_grad(set_to_none=True)
         server_optimizer = self._aggregate(selected_ids, updated_sizes) # aggregate local updates
         server_optimizer.step() # update global model with by the aggregated update

@@ -160,7 +160,7 @@ if __name__ == "__main__":
     parser.add_argument('--C', help='sampling fraction of clients per round (full participation when 0 is passed)', type=float, choices=[Range(0., 1.)], default=0.1)
     parser.add_argument('--E', help='number of local epochs', type=int, default=5)
     parser.add_argument('--B', help='local batch size (full-batch training when zero is passed)', type=int, default=10)
-    parser.add_argument('--beta', help='server momentum factor', type=float, choices=[Range(0., 1.)], default=0.)
+    parser.add_argument('--beta1', help='server momentum factor', type=float, choices=[Range(0., 1.)], default=0.)
     
     # optimization arguments
     parser.add_argument('--no_shuffle', help='do not shuffle data when training (if passed)', action='store_true')

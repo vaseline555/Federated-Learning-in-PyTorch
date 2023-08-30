@@ -13,7 +13,8 @@ class FedsgdOptimizer(FedavgOptimizer):
         if closure is not None:
             loss = closure()
 
-        for group in self.param_groups:
+        for idx, group in enumerate(self.param_groups):
+            if idx == 1: continue
             beta = group['momentum']
             for param in group['params']:
                 if param.grad is None:
@@ -28,7 +29,8 @@ class FedsgdOptimizer(FedavgOptimizer):
         return loss
 
     def accumulate(self, mixing_coefficient, local_layers_iterator):
-        for group in self.param_groups:
+        for idx, group in enumerate(self.param_groups):
+            if idx == 1: continue  # idx == 0: parameters; idx == 1: buffers - ignore as these are not parameters
             for server_param, (_, local_param) in zip(group['params'], local_layers_iterator):
                 local_delta = local_param.grad.mul(mixing_coefficient).data.type(server_param.dtype)
                 if server_param.grad is None:

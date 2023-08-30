@@ -201,13 +201,15 @@ def check_args(args):
     if args.algorithm == 'fedsgd':
         args.E = 1
         args.B = 0
-    elif args.algorithm == 'fedavgm':
-        if args.beta <= 0:
-            err = f'server momentum factor (i.e., `beta`) should be positive... please check!'
+    elif args.algorithm in ['fedavgm', 'fedadam', 'fedyogi', 'fedadagrad']:
+        if (args.beta1 <= 0) and (args.algorithm in ['fedavgm', 'fedadam', 'fedyogi', 'fedadagrad']):
+            err = f'server momentum factor (i.e., `beta1`) should be positive... please check!'
             logger.exception(err)
             raise AssertionError(err)
-    if args.beta > 0:
-        args.algorithm = 'fedavgm'
+        if (args.beta2 <= 0) and (args.algorithm in ['fedadam', 'fedyogi']):
+            err = f'server momentum factor (i.e., `beta1`) should be positive... please check!'
+            logger.exception(err)
+            raise AssertionError(err)
     
     # check model
     if args.model_name == 'Sent140LSTM':
