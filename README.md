@@ -25,8 +25,10 @@ Implementations of various Federated Learning (FL) algorithms in PyTorch, especi
 * `MobileNeXt` ([Daquan et al., 2020](https://arxiv.org/abs/2007.02269)), `SqueezeNeXt` ([Gholami et al., 2016](https://arxiv.org/abs/1803.10615)), `MobileViT` ([Mehta et al., 2021](https://arxiv.org/abs/2110.02178))
 * `DistilBERT` ([Sanh et al., 2019](https://arxiv.org/abs/1910.01108)), `SqueezeBERT` ([Iandola et al., 2020](https://arxiv.org/abs/2006.11316)), `MobileBERT` ([Sun et al., 2020](https://arxiv.org/abs/2004.02984))
 ### Algorithms
-* `FedAvg` and `FedSGD` ([McMahan et al., 2016](https://arxiv.org/abs/1602.05629))
-* `FedProx` ([Li et al., 2018](https://arxiv.org/abs/1812.06127))
+* `FedAvg` and `FedSGD` (McMahan et al., 2016) <a href='https://arxiv.org/abs/1602.05629'>Communication-Efficient Learning of Deep Networks from Decentralized Data</a>
+* `FedProx` (Li et al., 2018) <a href='https://arxiv.org/abs/1812.06127'>Federated Optimization in Heterogeneous Networks</a>
+* `FedOpt` (`FedAdam`, `FedYogi`, `FedAdaGrad`) (Reddi et al., 2020) <a href='https://arxiv.org/abs/2003.00295'>Adaptive Federated Optimization</a>
+
 ### Evaluation schemes
 * `local`: evaluate FL algorithm using holdout sets of (some/all) clients NOT participating in the current round. (i.e., evaluation of personalized federated learning setting)
 * `global`: evaluate FL algorithm using global holdout set located at the server. (*ONLY available if the raw dataset supports pre-defined validation/test set*).
