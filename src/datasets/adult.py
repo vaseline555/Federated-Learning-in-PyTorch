@@ -25,7 +25,7 @@ class Adult(torch.utils.data.Dataset):
         return len(self.inputs)
 
     def __getitem__(self, index):
-        inputs, targets = torch.tensor(self.inputs[index]), torch.tensor([self.targets[index]]).long()
+        inputs, targets = torch.tensor(self.inputs[index]).float(), torch.tensor(self.targets[index]).long()
         return inputs, targets
     
     def __repr__(self):
@@ -117,7 +117,7 @@ def fetch_adult(args, root, seed, test_size):
     logger.info(f'[LOAD] [ADULT] Processing client datsets!')
     client_datasets = []
     for dataset in raw_clients.values():
-        client_datasets.apend(_process_client_datasets(dataset, seed, test_size))
+        client_datasets.append(_process_client_datasets(dataset, seed, test_size))
     logger.info('[LOAD] [ADULT] ...processed client datasets!')
     
     args.in_features = 84

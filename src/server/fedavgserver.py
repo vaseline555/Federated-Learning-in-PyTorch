@@ -82,7 +82,7 @@ class FedavgServer(BaseServer):
         logger.info(f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...{num_sampled_clients} clients are selected!')
         return sampled_client_ids
 
-    def _log_results(self, resulting_sizes, results, eval, participated):
+    def _log_results(self, resulting_sizes, results, eval, participated, save_raw=False):
         losses, metrics, num_samples = list(), defaultdict(list), list()
         for identifier, result in results.items():
             client_log_string = f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDATE"}] [CLIENT] < {str(identifier).zfill(6)} > '
@@ -119,25 +119,56 @@ class FedavgServer(BaseServer):
         total_log_string = f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDATE"}] [SUMMARY] ({len(resulting_sizes)} clients):'
 
         # loss
-        losses = np.array(losses).astype(float)
-        weighted = losses.dot(num_samples) / sum(num_samples); equal = losses.mean(); std = losses.std(); top10p = np.percentile(losses, 90)
-        total_log_string += f'\n    - Loss: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Top 10% ({top10p:.4f})'
-        result_dict['loss'] = {'weighted': weighted, 'equal': equal, 'std': std, 'top10%': top10p}
+        losses_array = np.array(losses).astype(float)
+        weighted = losses_array.dot(num_samples) / sum(num_samples); std = losses_array.std()
+        
+        top10_indices = np.argpartition(losses_array, -int(0.9 * len(losses_array)))[-int(0.9 * len(losses_array)):]
+        top10 = losses_array[top10_indices]
+        top10_mean, top10_std = top10.dot(num_samples[top10_indices]) / sum(num_samples[top10_indices]), top10.std()
+
+        bot10_indices = np.argpartition(losses_array, max(1, int(0.1 * len(losses_array)) - 1))[:max(1, int(0.1 * len(losses_array)))]
+        bot10 = losses_array[bot10_indices]
+        bot10_mean, bot10_std = bot10.dot(num_samples[bot10_indices]) / sum(num_samples[bot10_indices]), bot10.std()
+
+        total_log_string += f'\n    - Loss: Avg. ({weighted:.4f}) Std. ({std:.4f}) | Top 10% ({top10_mean:.4f}) Std. ({top10_std:.4f}) | Bottom 10% ({bot10_mean:.4f}) Std. ({bot10_std:.4f})'
+        result_dict['loss'] = {
+            'avg': weighted.astype(float), 'std': std.astype(float), 
+            'top10p_avg': top10_mean.astype(float), 'top10p_std': top10_std.astype(float), 
+            'bottom10p_avg': bot10_mean.astype(float), 'bottom10p_std': bot10_std.astype(float)
+        }
+        if save_raw:
+            result_dict['loss']['raw'] = losses.astype(float)
         self.writer.add_scalars(
             f'Local {"Test" if eval else "Training"} Loss ' + eval * f'({"In" if participated else "Out"})',
-            {'Weighted Average': weighted, 'Equal Average': equal, 'Std.': std, 'Top 10%': top10p},
+            {'Avg.': weighted, 'Std.': std, 'Top 10% Avg.': top10_mean, 'Top 10% Std.': top10_std, 'Bottom 10% Avg.': bot10_mean, 'Bottom 10% Std.': bot10_std},
             self.round
         )
 
         # metrics
         for name, val in metrics.items():
-            val = np.array(val).astype(float)
-            weighted = val.dot(num_samples) / sum(num_samples); equal = val.mean(); std = val.std(); bot10p = np.percentile(val, 10)
-            total_log_string += f'\n    - {name.title()}: Weighted Avg. ({weighted:.4f}) | Equal Avg. ({equal:.4f}) | Std. ({std:.4f}) | Bottom 10% ({bot10p:.4f})'
-            result_dict[name] = {'weighted': weighted, 'equal': equal, 'std': std, 'bottom10%': bot10p}
+            val_array = np.array(val).astype(float)
+            weighted = val_array.dot(num_samples) / sum(num_samples); std = val_array.std()
+            
+            top10_indices = np.argpartition(val_array, -int(0.9 * len(val_array)))[-int(0.9 * len(val_array)):]
+            top10 = val_array[top10_indices]
+            top10_mean, top10_std = top10.dot(num_samples[top10_indices]) / sum(num_samples[top10_indices]), top10.std()
+
+            bot10_indices = np.argpartition(val_array, max(1, int(0.1 * len(val_array)) - 1))[:max(1, int(0.1 * len(val_array)))]
+            bot10 = val_array[bot10_indices]
+            bot10_mean, bot10_std = bot10.dot(num_samples[bot10_indices]) / sum(num_samples[bot10_indices]), bot10.std()
+
+            total_log_string += f'\n    - {name.title()}: Avg. ({weighted:.4f}) Std. ({std:.4f}) | Top 10% ({top10_mean:.4f}) Std. ({top10_std:.4f}) | Bottom 10% ({bot10_mean:.4f}) Std. ({bot10_std:.4f})'
+            result_dict[name] = {
+                'avg': weighted.astype(float), 'std': std.astype(float), 
+                'top10p_avg': top10_mean.astype(float), 'top10p_std': top10_std.astype(float), 
+                'bottom10p_avg': bot10_mean.astype(float), 'bottom10p_std': bot10_std.astype(float)
+            }
+                
+            if save_raw:
+                result_dict[name]['raw'] = val.astype(float)
             self.writer.add_scalars(
                 f'Local {"Test" if eval else "Training"} {name.title()}' + eval * f' ({"In" if participated else "Out"})',
-                {'Weighted Average': weighted, 'Equal Average': equal, 'Std.': std, 'Bottom 10%': bot10p},
+                {'Avg.': weighted, 'Std.': std, 'Top 10% Avg.': top10_mean, 'Top 10% Std.': top10_std, 'Bottom 10% Avg.': bot10_mean, 'Bottom 10% Std.': bot10_std},
                 self.round
             )
             self.writer.flush()
@@ -146,7 +177,7 @@ class FedavgServer(BaseServer):
         logger.info(total_log_string)
         return result_dict
 
-    def _request(self, ids, eval, participated, retain_model):
+    def _request(self, ids, eval, participated, retain_model, save_raw=False):
         def __update_clients(client):
             if client.model is None:
                 client.download(self.global_model)
@@ -181,7 +212,8 @@ class FedavgServer(BaseServer):
                 _eval_sizes, 
                 _eval_results, 
                 eval=True, 
-                participated=participated
+                participated=participated,
+                save_raw=save_raw
             )
             logger.info(f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...completed evaluation of {"all" if ids is None else len(ids)} clients!')
             return None
@@ -201,7 +233,8 @@ class FedavgServer(BaseServer):
                 update_sizes, 
                 _update_results, 
                 eval=False, 
-                participated=True
+                participated=True,
+                save_raw=False
             )
             logger.info(f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...completed updates of {"all" if ids is None else len(ids)} clients!')
             return update_sizes
@@ -266,7 +299,7 @@ class FedavgServer(BaseServer):
         # Client Update #
         #################
         selected_ids = self._sample_clients() # randomly select clients
-        updated_sizes = self._request(selected_ids, eval=False) # request update to selected clients
+        updated_sizes = self._request(selected_ids, eval=False, participated=True, retain_model=True) # request update to selected clients
         _ = self._request(selected_ids, eval=True, participated=True, retain_model=True) # request evaluation to selected clients 
         
         #################
@@ -288,7 +321,7 @@ class FedavgServer(BaseServer):
         ##############
         if self.args.eval_type != 'global': # `local` or `both`: evaluate on selected clients' holdout set
             selected_ids = self._sample_clients(exclude=excluded_ids)
-            _ = self._request(selected_ids, eval=True, participated=False, retain_model=False)
+            _ = self._request(selected_ids, eval=True, participated=False, retain_model=False, save_raw=self.round == self.args.R)
         if self.args.eval_type != 'local': # `global` or `both`: evaluate on the server's global holdout set 
             self._central_evaluate()
 

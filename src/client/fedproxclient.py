@@ -17,12 +17,12 @@ class FedproxClient(FedavgClient):
         global_model = copy.deepcopy(self.model)
         for param in global_model.parameters(): 
             param.requires_grad = False
-
+        
         optimizer = self.optim(self.model.parameters(), **self._refine_optim_args(self.args))
         for e in range(self.args.E):
             for inputs, targets in self.train_loader:
                 inputs, targets = inputs.to(self.args.device), targets.to(self.args.device)
-                
+
                 outputs = self.model(inputs)
                 loss = self.criterion()(outputs, targets)
 

@@ -30,7 +30,4 @@ def load_model(args):
         args.embedding_size = model.embedding_size
         args.num_hiddens = model.num_hiddens
         args.dropout = model.dropout
-    
-    if args.model_name == 'LogReg':
-        args.criterion = 'NLLLoss'
     return model, args

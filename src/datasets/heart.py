@@ -25,7 +25,7 @@ class Heart(torch.utils.data.Dataset):
         return len(self.inputs)
 
     def __getitem__(self, index):
-        inputs, targets = torch.tensor(self.inputs[index]), torch.tensor([self.targets[index]]).long()
+        inputs, targets = torch.tensor(self.inputs[index]).float(), torch.tensor(self.targets[index]).long()
         return inputs, targets
     
     def __repr__(self):

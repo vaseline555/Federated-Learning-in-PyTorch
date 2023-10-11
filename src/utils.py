@@ -200,7 +200,6 @@ def check_args(args):
     # check algorithm
     if args.algorithm == 'fedsgd':
         args.E = 1
-        args.B = 0
     elif args.algorithm in ['fedavgm', 'fedadam', 'fedyogi', 'fedadagrad']:
         if (args.beta1 <= 0) and (args.algorithm in ['fedavgm', 'fedadam', 'fedyogi', 'fedadagrad']):
             err = f'server momentum factor (i.e., `beta1`) should be positive... please check!'
@@ -289,7 +288,7 @@ class PainlessBCEWithLogitsLoss(torch.nn.BCEWithLogitsLoss):
         super(PainlessBCEWithLogitsLoss, self).__init__(**kwargs)
 
     def forward(self, inputs, targets):
-        return super(PainlessBCEWithLogitsLoss, self).forward(
+        return torch.nn.functional.binary_cross_entropy_with_logits(
             torch.atleast_1d(inputs.squeeze()), 
             torch.atleast_1d(targets).float()
         )
