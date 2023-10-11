@@ -122,7 +122,7 @@ class FedavgServer(BaseServer):
         losses_array = np.array(losses).astype(float)
         weighted = losses_array.dot(num_samples) / sum(num_samples); std = losses_array.std()
         
-        top10_indices = np.argpartition(losses_array, -int(0.9 * len(losses_array)))[-int(0.9 * len(losses_array)):] if len(losses_array) > 1 else 0
+        top10_indices = np.argpartition(losses_array, -int(0.1 * len(losses_array)))[-int(0.1 * len(losses_array)):] if len(losses_array) > 1 else 0
         top10 = np.atleast_1d(losses_array[top10_indices])
         top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
@@ -151,7 +151,7 @@ class FedavgServer(BaseServer):
             val_array = np.array(val).astype(float)
             weighted = val_array.dot(num_samples) / sum(num_samples); std = val_array.std()
             
-            top10_indices = np.argpartition(val_array, -int(0.9 * len(val_array)))[-int(0.9 * len(val_array)):] if len(val_array) > 1 else 0
+            top10_indices = np.argpartition(val_array, -int(0.1 * len(val_array)))[-int(0.1 * len(val_array)):] if len(val_array) > 1 else 0
             top10 = np.atleast_1d(val_array[top10_indices])
             top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
