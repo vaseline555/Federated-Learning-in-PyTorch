@@ -82,7 +82,7 @@ class FedavgServer(BaseServer):
         logger.info(f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...{num_sampled_clients} clients are selected!')
         return sampled_client_ids
 
-    def _log_results(self, resulting_sizes, results, eval, participated, save_raw=False):
+    def _log_results(self, resulting_sizes, results, eval, participated, save_raw):
         losses, metrics, num_samples = list(), defaultdict(list), list()
         for identifier, result in results.items():
             client_log_string = f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] [{"EVALUATE" if eval else "UPDATE"}] [CLIENT] < {str(identifier).zfill(6)} > '
@@ -122,13 +122,13 @@ class FedavgServer(BaseServer):
         losses_array = np.array(losses).astype(float)
         weighted = losses_array.dot(num_samples) / sum(num_samples); std = losses_array.std()
         
-        top10_indices = np.argpartition(losses_array, -int(0.9 * len(losses_array)))[-int(0.9 * len(losses_array)):]
-        top10 = losses_array[top10_indices]
-        top10_mean, top10_std = top10.dot(num_samples[top10_indices]) / sum(num_samples[top10_indices]), top10.std()
+        top10_indices = np.argpartition(losses_array, -int(0.9 * len(losses_array)))[-int(0.9 * len(losses_array)):] if len(losses_array) > 1 else 0
+        top10 = np.atleast_1d(losses_array[top10_indices])
+        top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
-        bot10_indices = np.argpartition(losses_array, max(1, int(0.1 * len(losses_array)) - 1))[:max(1, int(0.1 * len(losses_array)))]
-        bot10 = losses_array[bot10_indices]
-        bot10_mean, bot10_std = bot10.dot(num_samples[bot10_indices]) / sum(num_samples[bot10_indices]), bot10.std()
+        bot10_indices = np.argpartition(losses_array, max(1, int(0.1 * len(losses_array)) - 1))[:max(1, int(0.1 * len(losses_array)))] if len(losses_array) > 1 else 0
+        bot10 = np.atleast_1d(losses_array[bot10_indices])
+        bot10_mean, bot10_std = bot10.dot(np.atleast_1d(num_samples[bot10_indices])) / num_samples[bot10_indices].sum(), bot10.std()
 
         total_log_string += f'\n    - Loss: Avg. ({weighted:.4f}) Std. ({std:.4f}) | Top 10% ({top10_mean:.4f}) Std. ({top10_std:.4f}) | Bottom 10% ({bot10_mean:.4f}) Std. ({bot10_std:.4f})'
         result_dict['loss'] = {
@@ -136,8 +136,10 @@ class FedavgServer(BaseServer):
             'top10p_avg': top10_mean.astype(float), 'top10p_std': top10_std.astype(float), 
             'bottom10p_avg': bot10_mean.astype(float), 'bottom10p_std': bot10_std.astype(float)
         }
+
         if save_raw:
-            result_dict['loss']['raw'] = losses.astype(float)
+            result_dict['loss']['raw'] = losses
+
         self.writer.add_scalars(
             f'Local {"Test" if eval else "Training"} Loss ' + eval * f'({"In" if participated else "Out"})',
             {'Avg.': weighted, 'Std.': std, 'Top 10% Avg.': top10_mean, 'Top 10% Std.': top10_std, 'Bottom 10% Avg.': bot10_mean, 'Bottom 10% Std.': bot10_std},
@@ -149,13 +151,13 @@ class FedavgServer(BaseServer):
             val_array = np.array(val).astype(float)
             weighted = val_array.dot(num_samples) / sum(num_samples); std = val_array.std()
             
-            top10_indices = np.argpartition(val_array, -int(0.9 * len(val_array)))[-int(0.9 * len(val_array)):]
-            top10 = val_array[top10_indices]
-            top10_mean, top10_std = top10.dot(num_samples[top10_indices]) / sum(num_samples[top10_indices]), top10.std()
+            top10_indices = np.argpartition(val_array, -int(0.9 * len(val_array)))[-int(0.9 * len(val_array)):] if len(val_array) > 1 else 0
+            top10 = np.atleast_1d(val_array[top10_indices])
+            top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
-            bot10_indices = np.argpartition(val_array, max(1, int(0.1 * len(val_array)) - 1))[:max(1, int(0.1 * len(val_array)))]
-            bot10 = val_array[bot10_indices]
-            bot10_mean, bot10_std = bot10.dot(num_samples[bot10_indices]) / sum(num_samples[bot10_indices]), bot10.std()
+            bot10_indices = np.argpartition(val_array, max(1, int(0.1 * len(val_array)) - 1))[:max(1, int(0.1 * len(val_array)))] if len(val_array) > 1 else 0
+            bot10 = np.atleast_1d(val_array[bot10_indices])
+            bot10_mean, bot10_std = bot10.dot(np.atleast_1d(num_samples[bot10_indices])) / num_samples[bot10_indices].sum(), bot10.std()
 
             total_log_string += f'\n    - {name.title()}: Avg. ({weighted:.4f}) Std. ({std:.4f}) | Top 10% ({top10_mean:.4f}) Std. ({top10_std:.4f}) | Bottom 10% ({bot10_mean:.4f}) Std. ({bot10_std:.4f})'
             result_dict[name] = {
@@ -165,7 +167,8 @@ class FedavgServer(BaseServer):
             }
                 
             if save_raw:
-                result_dict[name]['raw'] = val.astype(float)
+                result_dict[name]['raw'] = val
+
             self.writer.add_scalars(
                 f'Local {"Test" if eval else "Training"} {name.title()}' + eval * f' ({"In" if participated else "Out"})',
                 {'Avg.': weighted, 'Std.': std, 'Top 10% Avg.': top10_mean, 'Top 10% Std.': top10_std, 'Bottom 10% Avg.': bot10_mean, 'Bottom 10% Std.': bot10_std},
@@ -177,7 +180,7 @@ class FedavgServer(BaseServer):
         logger.info(total_log_string)
         return result_dict
 
-    def _request(self, ids, eval, participated, retain_model, save_raw=False):
+    def _request(self, ids, eval, participated, retain_model, save_raw):
         def __update_clients(client):
             if client.model is None:
                 client.download(self.global_model)
@@ -196,7 +199,7 @@ class FedavgServer(BaseServer):
         logger.info(f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] Request {"updates" if not eval else "evaluation"} to {"all" if ids is None else len(ids)} clients!')
         if eval:
             if self.args.train_only:
-                return
+                return None
             results = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
                 for idx in TqdmToLogger(
@@ -299,15 +302,15 @@ class FedavgServer(BaseServer):
         # Client Update #
         #################
         selected_ids = self._sample_clients() # randomly select clients
-        updated_sizes = self._request(selected_ids, eval=False, participated=True, retain_model=True) # request update to selected clients
-        _ = self._request(selected_ids, eval=True, participated=True, retain_model=True) # request evaluation to selected clients 
+        updated_sizes = self._request(selected_ids, eval=False, participated=True, retain_model=True, save_raw=False) # request update to selected clients
+        _ = self._request(selected_ids, eval=True, participated=True, retain_model=True, save_raw=False) # request evaluation to selected clients 
         
         #################
         # Server Update #
         #################
         server_optimizer = self._get_algorithm(self.global_model, **self.opt_kwargs)
         server_optimizer.zero_grad(set_to_none=True)
-        server_optimizer = self._aggregate(selected_ids, updated_sizes) # aggregate local updates
+        server_optimizer = self._aggregate(server_optimizer, selected_ids, updated_sizes) # aggregate local updates
         server_optimizer.step() # update global model with by the aggregated update
         if self.round % self.args.lr_decay_step == 0: # update learning rate
             self.curr_lr *= self.args.lr_decay
@@ -331,7 +334,7 @@ class FedavgServer(BaseServer):
             curr_res = self.results[self.round]
             for key in curr_res['clients_evaluated_out'].keys():
                 for name in curr_res['clients_evaluated_out'][key].keys():
-                    if name in ['equal', 'weighted']:
+                    if 'avg' in name:
                         gap = curr_res['clients_evaluated_out'][key][name] - curr_res['clients_evaluated_in'][key][name]
                         gen_gap[f'gen_gap_{key}'] = {name: gap}
                         self.writer.add_scalars(f'Generalization Gap ({key.title()})', gen_gap[f'gen_gap_{key}'], self.round)
