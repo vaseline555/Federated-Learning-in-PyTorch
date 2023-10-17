@@ -121,12 +121,12 @@ class FedavgServer(BaseServer):
         # loss
         losses_array = np.array(losses).astype(float)
         weighted = losses_array.dot(num_samples) / sum(num_samples); std = losses_array.std()
-        
-        top10_indices = np.argpartition(losses_array, -int(0.1 * len(losses_array)))[-int(0.1 * len(losses_array)):] if len(losses_array) > 1 else 0
+        num = max(1, int(len(losses_array) * 0.1))
+        top10_indices = np.argpartition(losses_array, -num)[-num:]
         top10 = np.atleast_1d(losses_array[top10_indices])
         top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
-        bot10_indices = np.argpartition(losses_array, max(1, int(0.1 * len(losses_array)) - 1))[:max(1, int(0.1 * len(losses_array)))] if len(losses_array) > 1 else 0
+        bot10_indices = np.argpartition(losses_array, num)[:num]
         bot10 = np.atleast_1d(losses_array[bot10_indices])
         bot10_mean, bot10_std = bot10.dot(np.atleast_1d(num_samples[bot10_indices])) / num_samples[bot10_indices].sum(), bot10.std()
 
@@ -150,12 +150,12 @@ class FedavgServer(BaseServer):
         for name, val in metrics.items():
             val_array = np.array(val).astype(float)
             weighted = val_array.dot(num_samples) / sum(num_samples); std = val_array.std()
-            
-            top10_indices = np.argpartition(val_array, -int(0.1 * len(val_array)))[-int(0.1 * len(val_array)):] if len(val_array) > 1 else 0
+            num = max(1, int(len(val_array) * 0.1))
+            top10_indices = np.argpartition(val_array, -num)[-num:]
             top10 = np.atleast_1d(val_array[top10_indices])
             top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
-            bot10_indices = np.argpartition(val_array, max(1, int(0.1 * len(val_array)) - 1))[:max(1, int(0.1 * len(val_array)))] if len(val_array) > 1 else 0
+            bot10_indices = np.argpartition(val_array, num)[:num]
             bot10 = np.atleast_1d(val_array[bot10_indices])
             bot10_mean, bot10_std = bot10.dot(np.atleast_1d(num_samples[bot10_indices])) / num_samples[bot10_indices].sum(), bot10.std()
 
