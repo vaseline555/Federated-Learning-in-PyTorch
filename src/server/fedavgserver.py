@@ -121,12 +121,12 @@ class FedavgServer(BaseServer):
         # loss
         losses_array = np.array(losses).astype(float)
         weighted = losses_array.dot(num_samples) / sum(num_samples); std = losses_array.std()
-        num = max(1, int(len(losses_array) * 0.1))
-        top10_indices = np.argpartition(losses_array, -num)[-num:]
+        
+        top10_indices = np.argpartition(losses_array, -int(0.1 * len(losses_array)))[-int(0.1 * len(losses_array)):] if len(losses_array) > 1 else 0
         top10 = np.atleast_1d(losses_array[top10_indices])
         top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
-        bot10_indices = np.argpartition(losses_array, num)[:num]
+        bot10_indices = np.argpartition(losses_array, max(1, int(0.1 * len(losses_array)) - 1))[:max(1, int(0.1 * len(losses_array)))] if len(losses_array) > 1 else 0
         bot10 = np.atleast_1d(losses_array[bot10_indices])
         bot10_mean, bot10_std = bot10.dot(np.atleast_1d(num_samples[bot10_indices])) / num_samples[bot10_indices].sum(), bot10.std()
 
@@ -150,12 +150,12 @@ class FedavgServer(BaseServer):
         for name, val in metrics.items():
             val_array = np.array(val).astype(float)
             weighted = val_array.dot(num_samples) / sum(num_samples); std = val_array.std()
-            num = max(1, int(len(val_array) * 0.1))
-            top10_indices = np.argpartition(val_array, -num)[-num:]
+            
+            top10_indices = np.argpartition(val_array, -int(0.1 * len(val_array)))[-int(0.1 * len(val_array)):] if len(val_array) > 1 else 0
             top10 = np.atleast_1d(val_array[top10_indices])
             top10_mean, top10_std = top10.dot(np.atleast_1d(num_samples[top10_indices])) / num_samples[top10_indices].sum(), top10.std()
 
-            bot10_indices = np.argpartition(val_array, num)[:num]
+            bot10_indices = np.argpartition(val_array, max(1, int(0.1 * len(val_array)) - 1))[:max(1, int(0.1 * len(val_array)))] if len(val_array) > 1 else 0
             bot10 = np.atleast_1d(val_array[bot10_indices])
             bot10_mean, bot10_std = bot10.dot(np.atleast_1d(num_samples[bot10_indices])) / num_samples[bot10_indices].sum(), bot10.std()
 
@@ -200,7 +200,7 @@ class FedavgServer(BaseServer):
         if eval:
             if self.args.train_only:
                 return None
-            results = []
+            jobs, results = [], []
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
                 for idx in TqdmToLogger(
                     ids, 
@@ -208,7 +208,9 @@ class FedavgServer(BaseServer):
                     desc=f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...evaluate clients... ',
                     total=len(ids)
                     ):
-                    results.append(workhorse.submit(__evaluate_clients, self.clients[idx]).result()) 
+                    jobs.append(workhorse.submit(__evaluate_clients, self.clients[idx]).result()) 
+                for job in concurrent.futures.as_completed(jobs):
+                    results.append(job.result())
             _eval_sizes, _eval_results = list(map(list, zip(*results)))
             _eval_sizes, _eval_results = dict(ChainMap(*_eval_sizes)), dict(ChainMap(*_eval_results))
             self.results[self.round][f'clients_evaluated_{"in" if participated else "out"}'] = self._log_results(
@@ -221,7 +223,7 @@ class FedavgServer(BaseServer):
             logger.info(f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...completed evaluation of {"all" if ids is None else len(ids)} clients!')
             return None
         else:
-            results = []
+            jobs, results = [], []
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ids), os.cpu_count() - 1)) as workhorse:
                 for idx in TqdmToLogger(
                     ids, 
@@ -229,7 +231,9 @@ class FedavgServer(BaseServer):
                     desc=f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...update clients... ',
                     total=len(ids)
                     ):
-                    results.append(workhorse.submit(__update_clients, self.clients[idx]).result()) 
+                    jobs.append(workhorse.submit(__update_clients, self.clients[idx])) 
+                for job in concurrent.futures.as_completed(jobs):
+                    results.append(job.result())
             update_sizes, _update_results = list(map(list, zip(*results)))
             update_sizes, _update_results = dict(ChainMap(*update_sizes)), dict(ChainMap(*_update_results))
             self.results[self.round]['clients_updated'] = self._log_results(
