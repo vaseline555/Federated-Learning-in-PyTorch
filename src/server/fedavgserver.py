@@ -208,7 +208,7 @@ class FedavgServer(BaseServer):
                     desc=f'[{self.args.algorithm.upper()}] [{self.args.dataset.upper()}] [Round: {str(self.round).zfill(4)}] ...evaluate clients... ',
                     total=len(ids)
                     ):
-                    jobs.append(workhorse.submit(__evaluate_clients, self.clients[idx]).result()) 
+                    jobs.append(workhorse.submit(__evaluate_clients, self.clients[idx])) 
                 for job in concurrent.futures.as_completed(jobs):
                     results.append(job.result())
             _eval_sizes, _eval_results = list(map(list, zip(*results)))
